@@ -18,6 +18,7 @@ interface Point {
   label: string;
   score: number;
   sha: string;
+  ref: string | null;
   findings: number;
 }
 
@@ -34,8 +35,9 @@ export function HealthTrendChart({
     .filter((a) => a.status === "completed" && a.healthScore !== null)
     .map((a) => ({
       id: a.id,
-      date: a.finishedAt ?? a.createdAt,
-      label: formatDate(a.finishedAt ?? a.createdAt),
+      date: a.commitDate ?? a.finishedAt ?? a.createdAt,
+      label: formatDate(a.commitDate ?? a.finishedAt ?? a.createdAt),
+      ref: a.branch,
       score: Math.round((a.healthScore ?? 0) * 10) / 10,
       sha: shortSha(a.commitSha),
       findings: a.findingSummary?.total ?? 0,
@@ -61,7 +63,7 @@ export function HealthTrendChart({
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={points}
-            margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+            margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
             onClick={(state: unknown) => {
               const payload = (state as { activePayload?: Array<{ payload: Point }> } | null)
                 ?.activePayload;
@@ -85,10 +87,11 @@ export function HealthTrendChart({
             />
             <YAxis
               domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
               tick={{ fontSize: 11, fill: "var(--fg-subtle)" }}
               tickLine={false}
               axisLine={false}
-              width={40}
+              width={44}
             />
             <Tooltip
               cursor={{ stroke: "var(--border-strong)" }}
@@ -97,7 +100,10 @@ export function HealthTrendChart({
                 if (!active || !p) return null;
                 return (
                   <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs shadow-popover">
-                    <div className="font-mono text-fg-subtle">{p.sha}</div>
+                    <div className="font-mono text-fg-subtle">
+                      {p.sha}
+                      {p.ref ? ` · ${p.ref}` : ""}
+                    </div>
                     <div className="mt-0.5 text-fg">
                       Score <span className="tabular font-semibold">{p.score}</span> · {p.findings}{" "}
                       findings
@@ -134,7 +140,7 @@ export function HealthTrendChart({
         </ResponsiveContainer>
       </div>
       <figcaption className="sr-only">
-        Health score over time: {points.map((p) => `${p.label}: ${p.score}`).join("; ")}
+        Health score by commit date: {points.map((p) => `${p.label}: ${p.score}`).join("; ")}
       </figcaption>
     </figure>
   );

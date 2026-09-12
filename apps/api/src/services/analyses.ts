@@ -280,8 +280,10 @@ const DELTA_SPECS: DeltaSpec[] = [
     key: "vulns",
     label: "Known vulnerabilities",
     higherIsBetter: false,
-    pick: (m) =>
-      m.dependencies?.vulnerabilities ? m.dependencies.vulnerabilities.advisories.length : null,
+    pick: (m) => {
+      const v = m.dependencies?.vulnerabilities;
+      return v ? v.critical + v.high + v.moderate + v.low : null;
+    },
   },
   {
     key: "testFiles",

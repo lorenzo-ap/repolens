@@ -27,7 +27,7 @@ import {
 } from "d3-force";
 import { ArrowLeft, Expand, Maximize2, Search } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRepo } from "@/components/repo/context";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ import { Checkbox, Input } from "@/components/ui/input";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
 import { SegmentedControl } from "@/components/ui/tabs";
 import { useArchitecture } from "@/lib/queries";
+import { useUrlParams } from "@/lib/use-url-params";
 import { cn, fmt, truncateMiddle } from "@/lib/utils";
 
 type Layout = "hierarchical" | "force";
@@ -255,6 +256,7 @@ function Graph({
       maxZoom={2}
       nodesDraggable
       nodesConnectable={false}
+      zoomOnDoubleClick={false}
       elementsSelectable
       onNodeClick={(_e, n) => onSelect(n.id)}
       onNodeDoubleClick={(_e, n) => {
@@ -270,7 +272,7 @@ function Graph({
         pannable
         zoomable
         nodeColor={(n) =>
-          (n.data as NodeData).module.inCycle ? "var(--critical)" : "var(--border-strong)"
+          (n.data as NodeData).module.inCycle ? "var(--critical)" : "var(--fg-subtle)"
         }
         maskColor="rgb(0 0 0 / 0.08)"
       />
@@ -281,8 +283,6 @@ function Graph({
 export function ArchitectureView() {
   const repo = useRepo();
   const sp = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const root = sp.get("root");
   const level: "dir" | "file" = root ? "file" : "dir";
   const arch = useArchitecture(repo.analysis?.id ?? null, level, root ?? undefined);
@@ -292,15 +292,13 @@ export function ArchitectureView() {
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
+  const { update } = useUrlParams();
   const setRoot = useCallback(
     (r: string | null) => {
-      const next = new URLSearchParams(sp.toString());
-      if (r) next.set("root", r);
-      else next.delete("root");
       setSelected(null);
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+      update({ root: r });
     },
-    [sp, router, pathname],
+    [update],
   );
 
   useEffect(() => {

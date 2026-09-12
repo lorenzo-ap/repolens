@@ -4,8 +4,8 @@ import type { Category, Finding, FindingSort, Severity } from "@repolens/shared"
 import { CATEGORIES, CATEGORY_LABELS, SEVERITIES } from "@repolens/shared";
 import { Filter, Search, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRepo } from "@/components/repo/context";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/overlay";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
 import { useFindings } from "@/lib/queries";
+import { useUrlParams } from "@/lib/use-url-params";
 import { cn, fmt, SEVERITY_FULL, truncateMiddle } from "@/lib/utils";
 import { FindingDetailPanel } from "./finding-detail";
 
@@ -54,7 +55,6 @@ function readFilters(sp: URLSearchParams): Filters {
 
 export function FindingsView() {
   const repo = useRepo();
-  const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
   const filters = useMemo(() => readFilters(sp), [sp]);
@@ -64,26 +64,7 @@ export function FindingsView() {
   const searchRef = useRef<HTMLInputElement>(null);
   const analysisId = repo.analysis?.id ?? null;
 
-  const update = useCallback(
-    (
-      patch: Partial<
-        Record<
-          "severity" | "category" | "path" | "q" | "rule" | "sort" | "finding",
-          string | string[] | null
-        >
-      >,
-    ) => {
-      const next = new URLSearchParams(sp.toString());
-      for (const [k, v] of Object.entries(patch)) {
-        next.delete(k);
-        if (v === null || v === "" || (Array.isArray(v) && v.length === 0)) continue;
-        if (Array.isArray(v)) for (const item of v) next.append(k, item);
-        else next.set(k, v);
-      }
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-    },
-    [router, pathname, sp],
-  );
+  const { update } = useUrlParams();
 
   // Debounced free-text search.
   useEffect(() => {

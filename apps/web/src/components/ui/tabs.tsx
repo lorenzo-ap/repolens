@@ -79,8 +79,7 @@ export function SegmentedControl<T extends string>({
         <button
           key={o.value}
           type="button"
-          role="radio"
-          aria-checked={value === o.value}
+          aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
             "h-full rounded-sm px-2.5 text-xs font-medium transition-colors",

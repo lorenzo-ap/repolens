@@ -54,7 +54,7 @@ export default async function LandingPage() {
   return (
     <div className="py-10 sm:py-16">
       <section className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
-        <div>
+        <div className="min-w-0">
           <p className="label-caps">Engineering intelligence for GitHub repositories</p>
           <h1 className="mt-3 max-w-xl text-2xl leading-[1.15] sm:text-3xl">
             Know where a codebase is healthy, where it is fragile, and what to fix first.
@@ -89,7 +89,7 @@ export default async function LandingPage() {
           </ul>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface p-4 shadow-popover">
+        <div className="min-w-0 rounded-lg border border-border bg-surface p-4 shadow-popover">
           {repo && analysis ? (
             <>
               <div className="flex items-center justify-between gap-3">
