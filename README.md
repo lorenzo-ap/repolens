@@ -27,7 +27,7 @@ packages/shared    Zod schemas that double as API contracts and domain types
 packages/database  Drizzle schema, migrations, client, token encryption
 packages/analysis  Deterministic analyzers, scoring model, pipeline runner (fixture-tested)
 packages/config    Shared TypeScript configuration
-docs/              Product, UX, design-system, architecture (ADRs) and analysis-engine specs
+docs/              Product, UX, design-system, architecture (ADRs), analysis-engine and deployment
 ```
 
 Three processes (web, api, analyzer) and one PostgreSQL database. The job queue runs in PostgreSQL
@@ -64,8 +64,9 @@ pnpm dev                        # web :3000, api :4000, analyzer worker
 ```
 
 Open http://localhost:3000 and click **Explore the demo**. Sign-in requires a GitHub OAuth app
-(callback URL `<API_ORIGIN>/api/v1/auth/github/callback`) configured through `GITHUB_CLIENT_ID`
-and `GITHUB_CLIENT_SECRET`; without it the app runs in demo-only mode.
+(callback URL `<WEB_ORIGIN>/api/v1/auth/github/callback` — the browser stays on the web origin and
+the request is proxied to the API) configured through `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET`; without it the app runs in demo-only mode.
 
 ### Docker
 
@@ -110,6 +111,11 @@ browser on desktop and mobile viewports.
 See `.env.example`. Notable variables: `LIMITS` live in `packages/shared/src/limits.ts`;
 `ANALYZER_NETWORK=false` disables the npm advisory lookup for offline environments;
 `DEMO_REPO_OWNER`/`DEMO_REPO_NAME`/`DEMO_COMMITS` choose what the seed analyzes.
+
+## Deployment
+
+`docs/06-deployment.md` is the runbook: the Vercel + Cloud Run + Neon split, every environment
+variable per service, cost limits, and the one-time setup.
 
 ## License
 

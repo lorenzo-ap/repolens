@@ -42,10 +42,13 @@ export interface TestHarness {
 export class FakeGitHub implements GitHubClient {
   repos: GitHubRepository[] = [];
   issues: Array<{ owner: string; name: string; title: string; body: string }> = [];
+  /** redirect_uri values seen by the token exchange; GitHub rejects a mismatch with /authorize. */
+  redirectUris: string[] = [];
   user = { id: 1001, login: "alice", name: "Alice", avatar_url: null };
   failNext: Error | null = null;
 
-  async exchangeCode() {
+  async exchangeCode(_code: string, redirectUri: string) {
+    this.redirectUris.push(redirectUri);
     return { accessToken: "gho_test_token", scopes: ["read:user", "repo"] };
   }
   async getUser() {
@@ -103,7 +106,8 @@ export function ghRepo(
   };
 }
 
-export async function createHarness(): Promise<TestHarness> {
+/** `env` overrides the API configuration, for suites that need a different limit or quota. */
+export async function createHarness(env: NodeJS.ProcessEnv = {}): Promise<TestHarness> {
   const database = createDatabase(TEST_DATABASE_URL, { max: 3 });
   const config = loadConfig({
     DATABASE_URL: TEST_DATABASE_URL,
@@ -114,6 +118,7 @@ export async function createHarness(): Promise<TestHarness> {
     GITHUB_CLIENT_SECRET: "secret",
     WEB_ORIGIN: "http://localhost:3000",
     API_ORIGIN: "http://localhost:4000",
+    ...env,
   });
   const enqueued: AnalysisJobPayload[] = [];
   const github = new FakeGitHub();
@@ -141,6 +146,7 @@ export async function createHarness(): Promise<TestHarness> {
     enqueued.length = 0;
     github.repos = [];
     github.issues = [];
+    github.redirectUris = [];
   };
   return {
     app,

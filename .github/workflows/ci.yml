@@ -67,9 +67,11 @@ jobs:
       API_INTERNAL_URL: http://localhost:4000
       NEXT_TELEMETRY_DISABLED: "1"
       # A small, fast repository keeps the CI seed short; the default demo uses honojs/hono.
+      # All three refs are immutable tags on purpose. This used to end in `main`, which made the
+      # end-to-end run depend on whatever upstream looked like that day.
       DEMO_REPO_OWNER: vercel
       DEMO_REPO_NAME: swr
-      DEMO_COMMITS: "v2.2.0,v2.3.0,main"
+      DEMO_COMMITS: "v2.2.0,v2.3.0,v2.5.1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -82,12 +84,19 @@ jobs:
         working-directory: apps/web
       - run: pnpm db:migrate
       - run: pnpm seed:demo
-      - run: pnpm --filter @repolens/api --filter @repolens/web build
-      - name: Start services
+      - run: pnpm --filter @repolens/api build
+      - name: Start the API
         run: |
           (cd apps/api && nohup node dist/main.js > /tmp/api.log 2>&1 &)
-          (cd apps/web && nohup pnpm start > /tmp/web.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
+      # The landing page prerenders its demo panel by fetching API_INTERNAL_URL during the build,
+      # so the API has to be serving before the web app is built or the panel is baked away for
+      # the first `revalidate` window. Production has the same ordering: the API is deployed
+      # before Vercel builds the web app.
+      - run: pnpm --filter @repolens/web build
+      - name: Start the web app
+        run: |
+          (cd apps/web && nohup pnpm start > /tmp/web.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:3000/ > /dev/null && break; sleep 1; done
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4

@@ -72,7 +72,11 @@ test.describe("demo repository", () => {
     // Text search narrows results.
     await page.getByLabel("Search findings").fill("complexity");
     await expect(page).toHaveURL(/q=complexity/);
-    await expect(rows.first()).toContainText(/complexity/i);
+    // Which match lands first is not stable: findings of equal severity are ordered by their
+    // primary key, a random uuid, so the order among ties changes with every analysis. The
+    // search also matches on message and rule id, so a row can be a genuine hit without the
+    // term appearing in its rendered text. Assert a hit is present, not that it is first.
+    await expect(rows.filter({ hasText: /complexity/i }).first()).toBeVisible();
     const narrowed = await page
       .getByText(/\d+ findings?$/)
       .first()

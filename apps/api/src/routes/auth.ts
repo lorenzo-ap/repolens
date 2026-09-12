@@ -22,7 +22,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     sameSite: "lax" as const,
     secure: ctx.config.isProduction,
   };
-  const redirectUri = `${ctx.config.apiOrigin}/api/v1/auth/github/callback`;
+  // The callback lands on the web origin and is proxied to this API, so the browser stays on one
+  // origin for the whole flow and the session cookie is first-party. GitHub requires the value
+  // sent to /authorize and the one sent to the token exchange to be identical, hence one constant.
+  const redirectUri = `${ctx.config.webOrigin}/api/v1/auth/github/callback`;
 
   app.get("/auth/github", async (_req, reply) => {
     if (!ctx.config.github)

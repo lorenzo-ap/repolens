@@ -6,6 +6,7 @@ import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import type { AppContext, Queue } from "./context";
 import { createGitHubClient } from "./lib/github";
+import { closeErrorReporting, initErrorReporting } from "./lib/sentry";
 import { purgeExpiredSessions } from "./services/auth";
 
 const config = loadConfig();
@@ -15,6 +16,12 @@ const logger = pino({
     ? { transport: { target: "pino-pretty", options: { colorize: true } } }
     : {}),
 });
+
+const version = process.env.npm_package_version ?? "0.1.0";
+// Must happen before anything else can throw. Without SENTRY_DSN this is a no-op.
+if (initErrorReporting({ dsn: config.sentryDsn, environment: config.nodeEnv, release: version })) {
+  logger.info("error reporting enabled");
+}
 
 const database = createDatabase(config.databaseUrl, { max: 10 });
 const boss = new PgBoss({ connectionString: config.databaseUrl, schema: "pgboss", max: 2 });
@@ -49,7 +56,7 @@ const ctx: AppContext = {
   cipher: new TokenCipher(config.tokenEncryptionKey),
   config,
   logger,
-  version: process.env.npm_package_version ?? "0.1.0",
+  version,
 };
 if (!ctx.github)
   logger.warn("GITHUB_CLIENT_ID/SECRET not set: sign-in is disabled, demo mode only");
@@ -68,6 +75,8 @@ const shutdown = async (signal: string) => {
   await app.close();
   await boss.stop({ graceful: false });
   await database.close();
+  // Give queued events a moment to reach Sentry; returns immediately when reporting is off.
+  await closeErrorReporting();
   process.exit(0);
 };
 process.on("SIGINT", () => void shutdown("SIGINT"));

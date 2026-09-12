@@ -12,6 +12,7 @@
     "seed:demo": "tsx --env-file-if-exists=../../.env src/seed-demo.ts"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@repolens/analysis": "workspace:*",
     "@repolens/database": "workspace:*",
     "@repolens/shared": "workspace:*",

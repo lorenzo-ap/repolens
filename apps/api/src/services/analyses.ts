@@ -20,7 +20,7 @@ import {
   STEP_KEYS,
   STEP_LABELS,
 } from "@repolens/shared";
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import type { AppContext, Viewer } from "../context";
 import { ConflictError, LimitExceededError, NotFoundError } from "../lib/errors";
 import {
@@ -49,6 +49,8 @@ export async function startAnalysis(
     .orderBy(desc(analyses.createdAt))
     .limit(1);
   if (active) return { analysis: serializeAnalysis(active), created: false };
+
+  await assertWithinQuota(ctx, viewer);
 
   const created = await ctx.db.transaction(async (tx) => {
     const [row] = await tx
@@ -83,6 +85,74 @@ export async function startAnalysis(
   }
   ctx.logger.info({ analysisId: created.id, repositoryId: repo.id }, "analysis queued");
   return { analysis: serializeAnalysis(created), created: true };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Caps what one account can cost us: how many analyses it can have in flight at once, and how
+ * many it can start in any rolling 24 hours. Both are configurable per deployment.
+ *
+ * Only analyses the user asked for are counted. The demo repository's analyses are produced by
+ * the seed with no requesting user, and `assertCanManage` refuses to start one through the API,
+ * so browsing or re-reading the demo can never consume anyone's quota.
+ *
+ * Deliberately checked after the "this repository is already being analyzed" short-circuit, so
+ * clicking Analyze twice on the same repository costs nothing.
+ */
+async function assertWithinQuota(ctx: AppContext, viewer: Viewer): Promise<void> {
+  const { concurrentAnalyses, analysesPerDay } = ctx.config.quotas;
+  const since = new Date(Date.now() - DAY_MS);
+  // A raw Date inside an sql`` template reaches the driver unserialized, so bind the timestamp
+  // as text and cast it. The comparison in `where` below goes through drizzle and is fine.
+  const sinceIso = since.toISOString();
+  const [counts] = await ctx.db
+    .select({
+      active: sql<number>`count(*) filter (where ${analyses.status} in ('queued', 'running'))`,
+      recent: sql<number>`count(*) filter (where ${analyses.createdAt} >= ${sinceIso}::timestamptz)`,
+      // Raw sql`` bypasses drizzle's column decoding, so this arrives as whatever the driver
+      // produced — a Date or a timestamp string depending on the column's OID mapping.
+      oldestRecent: sql<
+        Date | string | null
+      >`min(${analyses.createdAt}) filter (where ${analyses.createdAt} >= ${sinceIso}::timestamptz)`,
+    })
+    .from(analyses)
+    .where(
+      and(
+        eq(analyses.requestedByUserId, viewer.user.id),
+        // Bounded on purpose: without this the count walks every analysis the user ever ran.
+        or(inArray(analyses.status, ["queued", "running"]), gte(analyses.createdAt, since)),
+      ),
+    );
+
+  const active = Number(counts?.active ?? 0);
+  if (active >= concurrentAnalyses) {
+    throw new LimitExceededError(
+      `You already have ${active} ${active === 1 ? "analysis" : "analyses"} queued or running, ` +
+        `and the limit is ${concurrentAnalyses}. Wait for one to finish, or cancel it, and try again.`,
+    );
+  }
+
+  const recent = Number(counts?.recent ?? 0);
+  if (recent >= analysesPerDay) {
+    throw new LimitExceededError(
+      `You have started ${recent} analyses in the last 24 hours, which is the limit. ` +
+        `You can start another one ${describeReset(counts?.oldestRecent ?? null)}.`,
+    );
+  }
+}
+
+/** Turns the oldest analysis inside the window into "in about 3 hours". */
+function describeReset(oldest: Date | string | null): string {
+  if (!oldest) return "later today";
+  const at = oldest instanceof Date ? oldest : new Date(oldest);
+  if (Number.isNaN(at.getTime())) return "later today";
+  const ms = at.getTime() + DAY_MS - Date.now();
+  if (ms <= 60_000) return "in a moment";
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.round(minutes / 60);
+  return `in about ${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
 /** Loads an analysis together with its repository, enforcing the repository's read rule. */

@@ -5,7 +5,7 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_API_URL", "NODE_ENV"]
+      "env": ["API_INTERNAL_URL", "NODE_ENV", "VERCEL"]
     },
     "typecheck": { "dependsOn": ["^build"] },
     "test": { "dependsOn": ["^build"], "env": ["DATABASE_URL"] },

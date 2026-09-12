@@ -1,0 +1,1 @@
+CREATE INDEX "analyses_requested_by_created_idx" ON "analyses" USING btree ("requested_by_user_id","created_at");

@@ -20,7 +20,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@repolens/shared"],
   poweredByHeader: false,
-  output: "standalone",
+  // Standalone is what the Docker image runs. Vercel produces its own output and warns when
+  // both are present, so leave it off there.
+  output: process.env.VERCEL ? undefined : "standalone",
   typedRoutes: false,
   agentRules: false,
   images: { remotePatterns: [{ protocol: "https", hostname: "avatars.githubusercontent.com" }] },
