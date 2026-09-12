@@ -1,7 +1,19 @@
-import { parse as parseYarnV1 } from "@yarnpkg/lockfile";
+import * as yarnLockfileModule from "@yarnpkg/lockfile";
 import { parse as parseYaml } from "yaml";
 
 export type LockfileType = "pnpm" | "npm" | "yarn" | "bun" | "none";
+
+type YarnParse = (text: string) => { type: string; object: Record<string, { version: string }> };
+/** @yarnpkg/lockfile is CommonJS; Node ESM and Vitest expose its exports differently. */
+const parseYarnV1: YarnParse = (() => {
+  const mod = yarnLockfileModule as unknown as {
+    parse?: YarnParse;
+    default?: { parse?: YarnParse };
+  };
+  const fn = mod.parse ?? mod.default?.parse;
+  if (!fn) throw new Error("@yarnpkg/lockfile: parse export not found");
+  return fn;
+})();
 
 export interface ResolvedPackage {
   name: string;
@@ -116,9 +128,45 @@ export function parseYarnLock(text: string): ResolvedPackage[] {
   return out;
 }
 
+/** Removes comments and trailing commas from JSONC without touching string contents. */
+export function stripJsonc(text: string): string {
+  let out = "";
+  let i = 0;
+  let inString = false;
+  while (i < text.length) {
+    const ch = text[i] as string;
+    const next = text[i + 1];
+    if (inString) {
+      out += ch;
+      if (ch === "\\") {
+        out += next ?? "";
+        i += 2;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      i++;
+    } else if (ch === "/" && next === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+    } else if (ch === "/" && next === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
+      i += 2;
+    } else {
+      out += ch;
+      i++;
+    }
+  }
+  return out.replace(/,(\s*[}\]])/g, "$1");
+}
+
 export function parseBunLock(text: string): ResolvedPackage[] {
-  // bun.lock is JSONC; strip comments and trailing commas conservatively.
-  const cleaned = text.replace(/\/\/.*$/gm, "").replace(/,\s*([}\]])/g, "$1");
+  const cleaned = stripJsonc(text);
   try {
     const doc = JSON.parse(cleaned) as { packages?: Record<string, unknown[]> };
     const out: ResolvedPackage[] = [];

@@ -79,6 +79,7 @@ export function computeHistoryMetrics(
   existingFiles: Set<string>,
   now: Date,
   truncated: boolean,
+  testFiles: Set<string> = new Set(),
 ): GitHistoryMetrics {
   if (commits.length === 0) {
     return {
@@ -168,8 +169,9 @@ export function computeHistoryMetrics(
   // Hotspots: churn × complexity, both normalised to [0, 1] over the candidate set.
   const maxCommits = Math.max(1, ...churn.map((c) => c.commits));
   const maxComplexity = Math.max(1, ...[...complexityByFile.values()]);
+  // Hotspots are risk: complex production code that keeps changing. Tests are excluded.
   const hotspots: Hotspot[] = churn
-    .filter((c) => (complexityByFile.get(c.file) ?? 0) > 0)
+    .filter((c) => (complexityByFile.get(c.file) ?? 0) > 0 && !testFiles.has(c.file))
     .map((c) => {
       const complexity = complexityByFile.get(c.file) ?? 0;
       return {
@@ -225,12 +227,14 @@ export const gitHistoryAnalyzer: Analyzer<GitHistoryMetrics> = {
     for (const fc of ctx.metrics.complexity?.fileComplexity ?? [])
       complexityByFile.set(fc.file, fc.sumCyclomatic);
     const existing = new Set(ctx.files.map((f) => f.path));
+    const tests = new Set(ctx.files.filter((f) => f.isTest).map((f) => f.path));
     const metrics = computeHistoryMetrics(
       commits,
       complexityByFile,
       existing,
       new Date(),
       commits.length >= LIMITS.maxCommits,
+      tests,
     );
 
     const findings = [];

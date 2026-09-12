@@ -31,7 +31,25 @@ export const SEVERITY_PENALTY: Record<Severity, number> = {
 };
 
 /** A category can lose at most this many points from findings volume alone. */
-export const MAX_FINDING_PENALTY = 40;
+export const MAX_FINDING_PENALTY = 20;
+
+/**
+ * Only findings whose signal is not already one of the category's base inputs contribute to the
+ * penalty; everything else would be counted twice (once as a metric, once as a finding).
+ */
+export const PENALIZED_RULES = new Set([
+  "quality/fixme",
+  "quality/too-many-params",
+  "ts/non-null-assertion-density",
+  "arch/hub-module",
+  "git/hotspot",
+  "structure/mixed-lockfiles",
+  "deps/invalid-manifest",
+  "testing/no-tests",
+]);
+
+/** Penalties are per 50 source files so a large codebase is not punished for its size alone. */
+export const PENALTY_SIZE_UNIT = 50;
 
 const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -285,12 +303,11 @@ export function computeScoring(metrics: MetricsDocument, findings: FindingInput[
     const max = inputs.reduce((a, i) => a + i.max, 0) || 100;
     const earned = inputs.reduce((a, i) => a + i.points, 0);
     const base = round1((earned / max) * 100);
-    const penalty = Math.min(
-      MAX_FINDING_PENALTY,
-      findings
-        .filter((f) => f.category === category)
-        .reduce((a, f) => a + SEVERITY_PENALTY[f.severity], 0),
-    );
+    const sizeFactor = Math.max(1, (metrics.testing?.sourceFiles ?? 0) / PENALTY_SIZE_UNIT);
+    const raw = findings
+      .filter((f) => f.category === category && PENALIZED_RULES.has(f.ruleId))
+      .reduce((a, f) => a + SEVERITY_PENALTY[f.severity], 0);
+    const penalty = Math.min(MAX_FINDING_PENALTY, raw / sizeFactor);
     return {
       category,
       weight: CATEGORY_WEIGHTS[category],

@@ -121,7 +121,11 @@ export async function runAnalysis(
     });
     await db
       .update(analyses)
-      .set({ commitSha: clone.commitSha, commitDate: clone.commitDate, branch: clone.branch })
+      .set({
+        commitSha: clone.commitSha,
+        commitDate: clone.commitDate,
+        branch: clone.branch ?? row.analysis.branch,
+      })
       .where(eq(analyses.id, analysisId));
 
     const onStep = async (e: StepEvent) => {
@@ -154,7 +158,7 @@ export async function runAnalysis(
       result,
       commitSha: clone.commitSha,
       commitDate: clone.commitDate,
-      branch: clone.branch,
+      branch: clone.branch ?? row.analysis.branch,
       startedAt,
     });
     logger.info(

@@ -278,7 +278,10 @@ export const dependenciesAnalyzer: Analyzer<DependenciesMetrics> = {
       unpinnedRanges: unpinnedRanges.slice(0, 100),
       gitOrUrlDeps: gitOrUrlDeps.slice(0, 100),
       deprecatedPackages,
-      workspacePackages: manifests.length > 1 ? manifests.length - 1 : 0,
+      workspacePackages:
+        root?.workspaces !== undefined || paths.has("pnpm-workspace.yaml")
+          ? manifests.length - 1
+          : 0,
       engines: root?.engines ?? null,
       topDependencies: [...direct.entries()]
         .filter(([, v]) => !v.dev)
