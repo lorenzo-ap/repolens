@@ -67,9 +67,11 @@ jobs:
       API_INTERNAL_URL: http://localhost:4000
       NEXT_TELEMETRY_DISABLED: "1"
       # A small, fast repository keeps the CI seed short; the default demo uses honojs/hono.
+      # All three refs are immutable tags on purpose. This used to end in `main`, which made the
+      # end-to-end run depend on whatever upstream looked like that day.
       DEMO_REPO_OWNER: vercel
       DEMO_REPO_NAME: swr
-      DEMO_COMMITS: "v2.2.0,v2.3.0,main"
+      DEMO_COMMITS: "v2.2.0,v2.3.0,v2.5.1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

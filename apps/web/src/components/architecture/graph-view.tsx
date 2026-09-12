@@ -164,6 +164,14 @@ function layoutNodes(
   return pos;
 }
 
+/**
+ * Low enough that fitView can always fit. A wide directory graph on a phone needs to zoom out
+ * past the old 0.1 floor; clamping there left nodes rendered outside the pane, where they could
+ * be neither seen nor tapped. Zoom controls and the minimap are how you get back in close.
+ */
+const MIN_ZOOM = 0.02;
+const FIT_VIEW = { padding: 0.12, minZoom: MIN_ZOOM } as const;
+
 function Graph({
   data,
   level,
@@ -239,7 +247,7 @@ function Graph({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refit when the graph shape changes
   useEffect(() => {
-    const t = setTimeout(() => flow.fitView({ padding: 0.12, duration: 200 }), 30);
+    const t = setTimeout(() => flow.fitView({ ...FIT_VIEW, duration: 200 }), 30);
     return () => clearTimeout(t);
   }, [level, root, layout, cyclesOnly, data]);
 
@@ -249,7 +257,8 @@ function Graph({
       edges={edges}
       nodeTypes={nodeTypes}
       fitView
-      minZoom={0.1}
+      fitViewOptions={FIT_VIEW}
+      minZoom={MIN_ZOOM}
       maxZoom={2}
       nodesDraggable
       nodesConnectable={false}
