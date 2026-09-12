@@ -1,0 +1,16 @@
+{
+  "name": "sample-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "express": "^4.18.2",
+    "request": "*",
+    "moment": "^2.29.4",
+    "left-pad": "github:stevemao/left-pad"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
