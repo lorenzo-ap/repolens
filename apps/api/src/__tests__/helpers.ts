@@ -42,10 +42,13 @@ export interface TestHarness {
 export class FakeGitHub implements GitHubClient {
   repos: GitHubRepository[] = [];
   issues: Array<{ owner: string; name: string; title: string; body: string }> = [];
+  /** redirect_uri values seen by the token exchange; GitHub rejects a mismatch with /authorize. */
+  redirectUris: string[] = [];
   user = { id: 1001, login: "alice", name: "Alice", avatar_url: null };
   failNext: Error | null = null;
 
-  async exchangeCode() {
+  async exchangeCode(_code: string, redirectUri: string) {
+    this.redirectUris.push(redirectUri);
     return { accessToken: "gho_test_token", scopes: ["read:user", "repo"] };
   }
   async getUser() {
@@ -141,6 +144,7 @@ export async function createHarness(): Promise<TestHarness> {
     enqueued.length = 0;
     github.repos = [];
     github.issues = [];
+    github.redirectUris = [];
   };
   return {
     app,

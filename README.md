@@ -64,8 +64,9 @@ pnpm dev                        # web :3000, api :4000, analyzer worker
 ```
 
 Open http://localhost:3000 and click **Explore the demo**. Sign-in requires a GitHub OAuth app
-(callback URL `<API_ORIGIN>/api/v1/auth/github/callback`) configured through `GITHUB_CLIENT_ID`
-and `GITHUB_CLIENT_SECRET`; without it the app runs in demo-only mode.
+(callback URL `<WEB_ORIGIN>/api/v1/auth/github/callback` — the browser stays on the web origin and
+the request is proxied to the API) configured through `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET`; without it the app runs in demo-only mode.
 
 ### Docker
 

@@ -73,6 +73,50 @@ describe("auth", () => {
     expect(String(res.headers["set-cookie"])).toContain("repolens_oauth_state=");
   });
 
+  // In production the browser only ever sees the web origin; the API is reachable through the
+  // web app's /api/v1/* rewrite. The whole OAuth round trip therefore has to stay on WEB_ORIGIN,
+  // otherwise the session cookie is set on a different site and sign-in silently does nothing.
+  it("keeps the entire OAuth flow on the web origin", async () => {
+    const authorize = await h.app.inject({ method: "GET", url: "/api/v1/auth/github" });
+    const redirectUri = new URL(String(authorize.headers.location)).searchParams.get(
+      "redirect_uri",
+    );
+    expect(redirectUri).toBe("http://localhost:3000/api/v1/auth/github/callback");
+    expect(redirectUri).not.toContain(h.ctx.config.apiOrigin);
+
+    const callback = await h.app.inject({
+      method: "GET",
+      url: "/api/v1/auth/github/callback?code=abc&state=s1",
+      headers: { cookie: "repolens_oauth_state=s1" },
+    });
+    // GitHub compares the two redirect_uri values, so the token exchange must send the same one.
+    expect(h.github.redirectUris).toEqual([redirectUri]);
+    expect(callback.headers.location).toBe("http://localhost:3000/repos");
+  });
+
+  it("sends the user back to the web origin when they deny access", async () => {
+    const res = await h.app.inject({
+      method: "GET",
+      url: "/api/v1/auth/github/callback?error=access_denied",
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe("http://localhost:3000/?auth=denied");
+  });
+
+  it("sets the session cookie without a Domain so it stays first-party", async () => {
+    const res = await h.app.inject({
+      method: "GET",
+      url: "/api/v1/auth/github/callback?code=abc&state=s1",
+      headers: { cookie: "repolens_oauth_state=s1" },
+    });
+    const cookies = ([] as string[]).concat(res.headers["set-cookie"] ?? []);
+    const session = cookies.find((c) => c.startsWith("repolens_session="));
+    // A Domain attribute would widen the cookie to every subdomain of the web origin, including
+    // the API host if it ever moves under the same parent domain.
+    expect(session).not.toMatch(/Domain=/i);
+    expect(session).toMatch(/Path=\//);
+  });
+
   it("rejects a callback whose state does not match", async () => {
     const res = await h.app.inject({
       method: "GET",
