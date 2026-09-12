@@ -23,3 +23,10 @@ export const LIMITS = {
 } as const;
 
 export const ANALYZER_VERSION = "1.0.0";
+
+/** pg-boss queue name shared by the API (producer) and the analyzer (consumer). */
+export const ANALYSIS_QUEUE = "analysis";
+
+export interface AnalysisJobPayload {
+  analysisId: string;
+}
