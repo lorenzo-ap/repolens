@@ -1,11 +1,13 @@
 import { Suspense } from "react";
-import { Overview } from "@/components/dashboard/overview";
+import { GitView } from "@/components/categories/git-view";
 import { Skeleton } from "@/components/ui/feedback";
 
-export default function RepoOverviewPage() {
+export const metadata = { title: "Git history" };
+
+export default function Page() {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <Overview />
+      <GitView />
     </Suspense>
   );
 }

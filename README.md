@@ -8,7 +8,10 @@ you can act on. No AI API is required; the analysis never executes code from the
 - **Health score** with seven category scores and a fully inspectable derivation.
 - **Findings** with severity, evidence, recommendation, file and line, searchable and filterable.
 - **Architecture** as an interactive import graph with cycle detection at directory and file level.
-- **History** with a score trend and a diff of findings and metrics between two analyses.
+- **Dependencies, Testing, Complexity and Git history** pages, each a focused view over the same
+  metrics document: tables, distributions and hotspots with links into the findings list.
+- **Analyses** with a score trend and a comparison of two analyses: improved, regressed and
+  unchanged categories, new and resolved findings, metric deltas.
 - **Live progress** for each analysis step, with timings.
 - **GitHub integration**: OAuth sign-in, private repositories, issue creation from a finding.
 - **Public demo** produced by the same pipeline, analyzing a real open-source repository at

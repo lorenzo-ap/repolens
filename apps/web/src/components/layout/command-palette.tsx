@@ -4,18 +4,23 @@ import { Command } from "cmdk";
 import {
   FolderGit2,
   GitBranch,
+  History,
   Home,
   LayoutDashboard,
   ListChecks,
   Network,
+  Package,
   Search,
   Settings,
+  Sigma,
   Sparkles,
+  TestTube2,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Dialog as RDialog } from "radix-ui";
 import { useEffect, useState } from "react";
 import { Kbd } from "@/components/ui/input";
+import { ScoreText } from "@/components/ui/score";
 import { useMe, useOwnRepositories } from "@/lib/queries";
 
 const OPEN_EVENT = "repolens:command-palette";
@@ -28,6 +33,17 @@ function repoBase(pathname: string): string | null {
   const m = /^\/r\/([^/]+)\/([^/]+)/.exec(pathname);
   return m ? `/r/${m[1]}/${m[2]}` : null;
 }
+
+const REPO_PAGES = [
+  { path: "", label: "Overview", icon: LayoutDashboard },
+  { path: "/findings", label: "Findings", icon: ListChecks },
+  { path: "/architecture", label: "Architecture", icon: Network },
+  { path: "/dependencies", label: "Dependencies", icon: Package },
+  { path: "/testing", label: "Testing", icon: TestTube2 },
+  { path: "/complexity", label: "Complexity", icon: Sigma },
+  { path: "/git", label: "Git history", icon: GitBranch },
+  { path: "/analyses", label: "Analyses", icon: History },
+];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -61,39 +77,32 @@ export function CommandPalette() {
   return (
     <RDialog.Root open={open} onOpenChange={setOpen}>
       <RDialog.Portal>
-        <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/40" />
-        <RDialog.Content className="anim-zoom fixed left-1/2 top-[15vh] z-50 w-[calc(100vw-32px)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface shadow-dialog focus:outline-none">
+        <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/30" />
+        <RDialog.Content className="anim-rise fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-32px)] max-w-[560px] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-bg shadow-lg focus:outline-none">
           <RDialog.Title className="sr-only">Command palette</RDialog.Title>
           <RDialog.Description className="sr-only">
             Jump to pages and repositories
           </RDialog.Description>
           <Command label="Command palette" loop>
             <div className="flex items-center gap-2 border-b border-border px-3">
-              <Search className="size-4 text-fg-subtle" aria-hidden />
+              <Search className="size-4 text-fg-tertiary" aria-hidden />
               <Command.Input
                 placeholder="Jump to a page or repository…"
-                className="h-11 w-full bg-transparent text-sm text-fg placeholder:text-fg-subtle focus:outline-none"
+                className="h-11 w-full bg-transparent text-sm text-fg placeholder:text-fg-tertiary focus:outline-none"
               />
               <Kbd>Esc</Kbd>
             </div>
-            <Command.List className="scrollbar-thin max-h-[50vh] overflow-y-auto p-1.5 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.04em] [&_[cmdk-group-heading]]:text-fg-subtle">
-              <Command.Empty className="px-3 py-8 text-center text-sm text-fg-muted">
+            <Command.List className="scrollbar-thin max-h-[50vh] overflow-y-auto p-1.5 [&_[cmdk-group-heading]]:eyebrow [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5">
+              <Command.Empty className="px-3 py-8 text-center text-sm text-fg-secondary">
                 No results.
               </Command.Empty>
               {base ? (
                 <Command.Group heading="This repository">
-                  <Item onSelect={() => go(base)} icon={LayoutDashboard}>
-                    Overview
-                  </Item>
-                  <Item onSelect={() => go(`${base}/findings`)} icon={ListChecks}>
-                    Findings
-                  </Item>
-                  <Item onSelect={() => go(`${base}/architecture`)} icon={Network}>
-                    Architecture
-                  </Item>
-                  <Item onSelect={() => go(`${base}/history`)} icon={GitBranch}>
-                    History
-                  </Item>
+                  {REPO_PAGES.map((p) => (
+                    <Item key={p.path} onSelect={() => go(`${base}${p.path}`)} icon={p.icon}>
+                      {p.label}
+                    </Item>
+                  ))}
                 </Command.Group>
               ) : null}
               <Command.Group heading="Pages">
@@ -124,17 +133,24 @@ export function CommandPalette() {
                       value={`repo ${r.repository.fullName}`}
                     >
                       <span className="font-mono text-xs">{r.repository.fullName}</span>
-                      {r.latestAnalysis?.healthScore !== null &&
-                      r.latestAnalysis?.healthScore !== undefined ? (
-                        <span className="tabular ml-auto text-xs text-fg-subtle">
-                          {Math.round(r.latestAnalysis.healthScore)}
-                        </span>
-                      ) : null}
+                      <ScoreText
+                        score={r.latestAnalysis?.healthScore ?? null}
+                        className="ml-auto text-xs"
+                      />
                     </Item>
                   ))}
                 </Command.Group>
               ) : null}
             </Command.List>
+            <div className="flex items-center gap-3 border-t border-border px-3 py-1.5 text-2xs text-fg-tertiary">
+              <span className="flex items-center gap-1">
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd> navigate
+              </span>
+              <span className="flex items-center gap-1">
+                <Kbd>↵</Kbd> open
+              </span>
+            </div>
           </Command>
         </RDialog.Content>
       </RDialog.Portal>
@@ -157,9 +173,9 @@ function Item({
     <Command.Item
       value={value}
       onSelect={onSelect}
-      className="flex h-9 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm text-fg data-[selected=true]:bg-surface-2"
+      className="flex h-8 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm text-fg data-[selected=true]:bg-bg-muted"
     >
-      <Icon className="size-4 text-fg-subtle" aria-hidden />
+      <Icon className="size-3.5 text-fg-tertiary" aria-hidden />
       {children}
     </Command.Item>
   );

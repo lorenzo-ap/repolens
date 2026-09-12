@@ -8,9 +8,11 @@ import { useDeferredValue, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
+import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/feedback";
 import { GithubIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page";
+import { Panel, PanelHeader } from "@/components/ui/panel";
 import { ScoreText } from "@/components/ui/score";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
 import { ApiClientError, api } from "@/lib/api";
@@ -49,97 +51,92 @@ export default function ReposPage() {
   if (!me.data?.user)
     return (
       <div className="py-16">
-        <Skeleton className="mx-auto h-8 w-64" />
+        <SkeletonRows rows={4} />
       </div>
     );
 
   return (
     <div className="py-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl">Repositories</h1>
-          <p className="mt-1 text-sm text-fg-muted">
-            Repositories you own or collaborate on. Analysis runs on the default branch.
-          </p>
-        </div>
-        <div className="relative w-full sm:w-72">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-2 size-4 text-fg-subtle"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search your repositories…"
-            className="pl-8"
-            aria-label="Search repositories"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setQuery("");
-            }}
-          />
-        </div>
-      </div>
+      <PageHeader
+        title="Repositories"
+        description="Repositories you own or collaborate on. Analysis runs on the default branch."
+        actions={
+          <div className="relative w-full sm:w-72">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-fg-tertiary"
+              aria-hidden
+            />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search your repositories"
+              className="pl-8"
+              aria-label="Search repositories"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setQuery("");
+              }}
+            />
+          </div>
+        }
+      />
 
       {own.data?.repositories.length ? (
-        <section className="mt-6" aria-label="Analyzed repositories">
-          <h2 className="label-caps mb-2">In RepoLens</h2>
-          <div className="overflow-hidden rounded-md border border-border bg-surface">
-            <Table>
-              <THead>
-                <tr>
-                  <Th>Repository</Th>
-                  <Th>Last analysis</Th>
-                  <Th numeric>Analyses</Th>
-                  <Th numeric>Score</Th>
-                </tr>
-              </THead>
-              <TBody>
-                {own.data.repositories.map((r) => (
-                  <Tr key={r.repository.id}>
-                    <Td>
-                      <Link
-                        href={`/r/${r.repository.owner}/${r.repository.name}`}
-                        className="font-mono text-xs font-medium text-fg hover:underline"
-                      >
-                        {r.repository.fullName}
-                      </Link>
-                    </Td>
-                    <Td className="text-fg-muted">
-                      {r.activeAnalysis ? (
-                        <Link
-                          href={`/r/${r.repository.owner}/${r.repository.name}/analyses/${r.activeAnalysis.id}`}
-                        >
-                          <StatusBadge status={r.activeAnalysis.status} />
-                        </Link>
-                      ) : r.latestAnalysis ? (
-                        relativeTime(r.latestAnalysis.finishedAt ?? r.latestAnalysis.createdAt)
-                      ) : (
-                        "–"
-                      )}
-                    </Td>
-                    <Td numeric>{r.analysisCount}</Td>
-                    <Td numeric>
-                      <ScoreText score={r.latestAnalysis?.healthScore ?? null} />
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </div>
-        </section>
+        <Panel className="mb-6">
+          <PanelHeader title="In RepoLens" description="repositories you have analyzed" />
+          <Table>
+            <THead>
+              <tr>
+                <Th>Repository</Th>
+                <Th>Last analysis</Th>
+                <Th numeric>Analyses</Th>
+                <Th numeric>Score</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {own.data.repositories.map((r) => (
+                <Tr
+                  key={r.repository.id}
+                  interactive
+                  onClick={() => router.push(`/r/${r.repository.owner}/${r.repository.name}`)}
+                >
+                  <Td mono>
+                    <Link
+                      href={`/r/${r.repository.owner}/${r.repository.name}`}
+                      className="hover:underline"
+                    >
+                      {r.repository.fullName}
+                    </Link>
+                  </Td>
+                  <Td className="text-fg-secondary">
+                    {r.activeAnalysis ? (
+                      <StatusBadge status={r.activeAnalysis.status} />
+                    ) : r.latestAnalysis ? (
+                      relativeTime(r.latestAnalysis.finishedAt ?? r.latestAnalysis.createdAt)
+                    ) : (
+                      "–"
+                    )}
+                  </Td>
+                  <Td numeric>{r.analysisCount}</Td>
+                  <Td numeric>
+                    <ScoreText score={r.latestAnalysis?.healthScore ?? null} />
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </Panel>
       ) : null}
 
-      <h2 className="label-caps mt-6 mb-2">On GitHub</h2>
-      <div className="overflow-hidden rounded-md border border-border bg-surface">
+      <Panel>
+        <PanelHeader
+          title="On GitHub"
+          description={repos.data ? `page ${repos.data.page}` : undefined}
+        />
         {repos.isPending ? (
-          <div className="space-y-px p-3">
-            {Array.from({ length: 8 }, (_, i) => (
-              <Skeleton key={`row-${i.toString()}`} className="h-9" />
-            ))}
-          </div>
+          <SkeletonRows rows={8} />
         ) : repos.isError ? (
           <div className="p-4">
             <ErrorState error={repos.error} onRetry={() => repos.refetch()} />
@@ -178,19 +175,19 @@ export default function ReposPage() {
                     <Td>
                       <div className="flex min-w-0 items-center gap-2">
                         {r.isPrivate ? (
-                          <Lock className="size-3.5 shrink-0 text-fg-subtle" aria-label="Private" />
+                          <Lock className="size-3 shrink-0 text-fg-tertiary" aria-label="Private" />
                         ) : null}
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             {r.local ? (
                               <Link
                                 href={`/r/${r.owner}/${r.name}`}
-                                className="truncate font-mono text-xs font-medium text-fg hover:underline"
+                                className="truncate font-mono text-xs text-fg hover:underline"
                               >
                                 {r.fullName}
                               </Link>
                             ) : (
-                              <span className="truncate font-mono text-xs font-medium text-fg">
+                              <span className="truncate font-mono text-xs text-fg">
                                 {r.fullName}
                               </span>
                             )}
@@ -198,28 +195,28 @@ export default function ReposPage() {
                               href={r.htmlUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-fg-subtle hover:text-fg"
+                              className="text-fg-tertiary hover:text-fg"
                               aria-label="Open on GitHub"
                             >
                               <ExternalLink className="size-3" />
                             </a>
                           </div>
                           {r.description ? (
-                            <p className="truncate text-xs text-fg-subtle">{r.description}</p>
+                            <p className="truncate text-xs text-fg-tertiary">{r.description}</p>
                           ) : null}
                         </div>
                       </div>
                     </Td>
                     <Td className="hidden md:table-cell">
-                      <span className="text-fg-muted">{r.primaryLanguage ?? "–"}</span>
+                      <span className="text-fg-secondary">{r.primaryLanguage ?? "–"}</span>
                       {limited ? (
-                        <span className="ml-1.5 text-2xs text-fg-subtle">(no AST)</span>
+                        <span className="ml-1.5 text-2xs text-fg-tertiary">no AST</span>
                       ) : null}
                     </Td>
-                    <Td className="hidden text-fg-muted lg:table-cell">
+                    <Td className="hidden text-fg-secondary lg:table-cell">
                       {formatBytesKb(r.sizeKb)}
                     </Td>
-                    <Td className="hidden text-fg-muted sm:table-cell">
+                    <Td className="hidden text-fg-secondary sm:table-cell">
                       {relativeTime(r.pushedAt)}
                     </Td>
                     <Td>
@@ -228,11 +225,11 @@ export default function ReposPage() {
                           <StatusBadge status={active.status} />
                         </Link>
                       ) : latest ? (
-                        <span className="text-xs text-fg-muted">
+                        <span className="text-xs text-fg-secondary">
                           Analyzed {relativeTime(latest.finishedAt ?? latest.createdAt)}
                         </span>
                       ) : (
-                        <span className="text-xs text-fg-subtle">Never analyzed</span>
+                        <span className="text-xs text-fg-tertiary">Never analyzed</span>
                       )}
                     </Td>
                     <Td numeric>
@@ -242,7 +239,7 @@ export default function ReposPage() {
                       {active ? (
                         <Button asChild size="sm" variant="ghost">
                           <Link href={`/r/${r.owner}/${r.name}/analyses/${active.id}`}>
-                            View progress
+                            Progress
                           </Link>
                         </Button>
                       ) : (
@@ -263,12 +260,8 @@ export default function ReposPage() {
             </TBody>
           </Table>
         )}
-      </div>
-
-      {repos.data ? (
-        <div className="mt-3 flex items-center justify-between text-xs text-fg-muted">
-          <span>Page {repos.data.page}</span>
-          <div className="flex gap-1">
+        {repos.data ? (
+          <div className="flex items-center justify-end gap-1 border-t border-border bg-bg-subtle px-2 py-1.5">
             <Button
               size="sm"
               variant="ghost"
@@ -286,8 +279,8 @@ export default function ReposPage() {
               Next <ChevronRight />
             </Button>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </Panel>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { Header } from "@/components/layout/header";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -10,7 +9,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", 
 export const metadata: Metadata = {
   title: { default: "RepoLens", template: "%s · RepoLens" },
   description:
-    "Deterministic engineering intelligence for GitHub repositories: code quality, architecture, dependencies, testing, complexity and Git history in one health score.",
+    "Understand your codebase before you change it. Deterministic analysis of architecture, quality, dependencies, testing, complexity and Git history for GitHub repositories.",
   icons: { icon: "/favicon.svg" },
 };
 
@@ -21,14 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <a
             href="#main"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2 focus:text-sm"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-50 focus:rounded-sm focus:border focus:border-border focus:bg-bg focus:px-3 focus:py-2 focus:text-sm"
           >
             Skip to content
           </a>
-          <Header />
-          <main id="main" className="mx-auto w-full max-w-[1440px] px-4 pb-16 sm:px-6">
-            {children}
-          </main>
+          {children}
         </Providers>
       </body>
     </html>
