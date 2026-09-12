@@ -76,7 +76,7 @@ describe("scoring", () => {
       scoring: null,
     };
     const findings = Array.from({ length: 100 }, () => ({
-      ruleId: "quality/x",
+      ruleId: "quality/fixme",
       category: "quality" as const,
       severity: "critical" as const,
       title: "t",
@@ -90,8 +90,8 @@ describe("scoring", () => {
     }));
     const s = computeScoring(empty, findings);
     const q = s.categories.find((c) => c.category === "quality")!;
-    expect(q.findingPenalty).toBe(40);
-    expect(q.score).toBe(10);
+    expect(q.findingPenalty).toBe(20);
+    expect(q.score).toBe(30);
   });
 });
 

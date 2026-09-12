@@ -19,50 +19,83 @@ interface TsConfigFacts {
   noImplicitAny: boolean | null;
 }
 
-/** Reads compiler options from tsconfig.json as data (JSON with comments) and follows local `extends`. */
-export async function readTsConfigFacts(
+function normalizeRelative(fromDir: string, rel: string): string {
+  const segments = [...(fromDir ? fromDir.split("/") : []), ...rel.split("/")];
+  const out: string[] = [];
+  for (const seg of segments) {
+    if (seg === "." || seg === "") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return out.join("/");
+}
+
+interface RawTsConfig {
+  extends?: unknown;
+  compilerOptions?: Record<string, unknown>;
+  references?: Array<{ path?: unknown }>;
+}
+
+async function readRawConfig(rootDir: string, path: string): Promise<RawTsConfig | null> {
+  const text = await readTextFile(rootDir, path);
+  if (!text) return null;
+  const parsed = ts.parseConfigFileTextToJson(path, text);
+  return (parsed.config ?? null) as RawTsConfig | null;
+}
+
+/** Merges compilerOptions along a local `extends` chain (base first, derived last). */
+async function mergedOptions(
   rootDir: string,
+  start: string,
   files: Set<string>,
-): Promise<TsConfigFacts> {
-  const candidates = ["tsconfig.json", "tsconfig.base.json"];
-  const start = candidates.find((c) => files.has(c));
-  if (!start) return { present: false, strict: null, strictNullChecks: null, noImplicitAny: null };
-  const merged: Record<string, unknown> = {};
+): Promise<Record<string, unknown>> {
+  const chain: Record<string, unknown>[] = [];
   const seen = new Set<string>();
   let current: string | undefined = start;
-  const chain: Record<string, unknown>[] = [];
   while (current && !seen.has(current) && chain.length < 10) {
     seen.add(current);
-    const text = await readTextFile(rootDir, current);
-    if (!text) break;
-    const parsed = ts.parseConfigFileTextToJson(current, text);
-    const config = (parsed.config ?? {}) as {
-      extends?: unknown;
-      compilerOptions?: Record<string, unknown>;
-    };
+    const config = await readRawConfig(rootDir, current);
+    if (!config) break;
     chain.push(config.compilerOptions ?? {});
-    const ext =
-      typeof config.extends === "string"
-        ? config.extends
-        : Array.isArray(config.extends)
-          ? config.extends[0]
-          : undefined;
+    const ext = Array.isArray(config.extends) ? config.extends[0] : config.extends;
     if (typeof ext === "string" && (ext.startsWith("./") || ext.startsWith("../"))) {
       const dir = current.includes("/") ? current.slice(0, current.lastIndexOf("/")) : "";
-      const segments = [...(dir ? dir.split("/") : []), ...ext.split("/")];
-      const out: string[] = [];
-      for (const s of segments) {
-        if (s === "." || s === "") continue;
-        if (s === "..") out.pop();
-        else out.push(s);
-      }
-      let next = out.join("/");
+      let next = normalizeRelative(dir, ext);
       if (!next.endsWith(".json")) next += ".json";
       current = files.has(next) ? next : undefined;
     } else current = undefined;
   }
-  // The most-derived config wins, so apply from base to derived.
+  const merged: Record<string, unknown> = {};
   for (const opts of chain.reverse()) Object.assign(merged, opts);
+  return merged;
+}
+
+/**
+ * Reads strictness facts from tsconfig as data (JSON with comments), following local `extends`
+ * chains and, for solution-style configs (`files: []` + `references`), the referenced projects.
+ * The first config that defines `strict` wins; build configs are preferred over test configs.
+ */
+export async function readTsConfigFacts(
+  rootDir: string,
+  files: Set<string>,
+): Promise<TsConfigFacts> {
+  const candidates = ["tsconfig.json", "tsconfig.base.json"].filter((c) => files.has(c));
+  const start = candidates[0];
+  if (!start) return { present: false, strict: null, strictNullChecks: null, noImplicitAny: null };
+  const queue: string[] = [start];
+  const root = await readRawConfig(rootDir, start);
+  for (const ref of root?.references ?? []) {
+    if (typeof ref.path !== "string") continue;
+    let target = normalizeRelative("", ref.path);
+    if (!target.endsWith(".json")) target = target ? `${target}/tsconfig.json` : "tsconfig.json";
+    if (files.has(target) && !queue.includes(target)) queue.push(target);
+  }
+  queue.sort((a, b) => Number(/spec|test/i.test(a)) - Number(/spec|test/i.test(b)));
+  let merged: Record<string, unknown> = {};
+  for (const path of queue.slice(0, 12)) {
+    merged = await mergedOptions(rootDir, path, files);
+    if (typeof merged.strict === "boolean" || typeof merged.strictNullChecks === "boolean") break;
+  }
   const bool = (k: string): boolean | null =>
     typeof merged[k] === "boolean" ? (merged[k] as boolean) : null;
   const strict = bool("strict");

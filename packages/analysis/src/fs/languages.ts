@@ -160,6 +160,14 @@ export function isMinified(path: string): boolean {
   return /\.min\.(js|css)$/i.test(path);
 }
 
+/** Directories that hold supporting code (benchmarks, examples, docs) rather than the product itself. */
+const AUXILIARY_DIR_RE =
+  /^(benchmarks?|bench|examples?|docs?|scripts?|tools?|fixtures?|deno_dist|perf-measures|playgrounds?|sandbox|demos?|samples?|website|\.github|\.storybook)(\/|$)/i;
+
+export function isAuxiliaryPath(path: string): boolean {
+  return AUXILIARY_DIR_RE.test(path);
+}
+
 export function isGeneratedPath(path: string): boolean {
   return /(^|\/)(generated|__generated__|\.generated)\//i.test(path) || /\.generated\./i.test(path);
 }

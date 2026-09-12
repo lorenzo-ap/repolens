@@ -159,10 +159,13 @@ Findings: `git/hotspot` (high for top 5 hotspots), `git/bus-factor` (high when 1
 ## Scoring
 
 Each category maps its metrics to 0–100 with explicit, monotonic transforms (documented in code
-next to the transform). Example: `testing = clamp(0,100, 40·ratioScore + 30·coverageOfAreas +
-20·hasFramework + 10·noOnlyNoSkip)`. Findings subtract a capped penalty per severity
-(critical 10, high 4, medium 1.5, low 0.5, info 0), with a per-category cap of 40 points so a single
-category cannot go negative from volume alone.
+next to the transform); the base score is points earned over points available. Findings subtract
+a penalty per severity (critical 10, high 4, medium 1.5, low 0.5, info 0), but only for rules whose
+signal is not already one of the category's inputs (hotspots, hub modules, FIXMEs, parameter
+counts, non-null density, mixed lockfiles, invalid manifests, no tests). Counting a long function
+both as a density input and as a finding would double-penalise it. The penalty is divided by
+`max(1, sourceFiles / 50)` so large codebases are not punished for size alone, and capped at 20
+points per category.
 
 Health score = weighted mean: quality 20, complexity 15, architecture 15, dependencies 15,
 testing 20, maintainability 10 (derived: file size distribution, duplication, TODO density),

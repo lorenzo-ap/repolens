@@ -3,6 +3,7 @@ import { Node, SyntaxKind } from "ts-morph";
 import { repoPathOf } from "../ast/project";
 import { finding, pluralize } from "../findings";
 import { readTextFile, topLevelDir } from "../fs/enumerate";
+import { isAuxiliaryPath } from "../fs/languages";
 import type { Analyzer, AnalyzerContext, AnalyzerResult } from "../types";
 
 const FRAMEWORK_PACKAGES: Record<string, string> = {
@@ -126,6 +127,7 @@ export const testingAnalyzer: Analyzer<TestingMetrics> = {
     const areaSources = new Map<string, number>();
     const areaTests = new Map<string, number>();
     for (const f of sourceFiles) {
+      if (isAuxiliaryPath(f.path)) continue;
       const a = areaOf(f.path);
       if (!a) continue;
       areaSources.set(a, (areaSources.get(a) ?? 0) + 1);

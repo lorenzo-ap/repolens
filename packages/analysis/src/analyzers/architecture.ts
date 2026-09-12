@@ -3,6 +3,7 @@ import { Node, SyntaxKind } from "ts-morph";
 import { repoPathOf } from "../ast/project";
 import { finding, pluralize } from "../findings";
 import { readTextFile } from "../fs/enumerate";
+import { isAuxiliaryPath } from "../fs/languages";
 import { stronglyConnectedComponents } from "../graph/tarjan";
 import type { Analyzer, AnalyzerContext, AnalyzerResult } from "../types";
 import { throwIfAborted } from "../types";
@@ -17,6 +18,8 @@ export interface FileGraph {
   unresolved: number;
   /** Lines of code per file for aggregation. */
   loc: Map<string, number>;
+  /** Files referenced only through type-only imports (not edges, but not orphans either). */
+  typeReferenced: Set<string>;
 }
 
 export interface GraphNode {
@@ -160,6 +163,7 @@ export async function buildFileGraph(ctx: AnalyzerContext): Promise<FileGraph> {
   const edges = new Map<string, Set<string>>();
   const loc = new Map<string, number>();
   const nodes: string[] = [];
+  const typeReferenced = new Set<string>();
   let externalEdges = 0;
   let unresolved = 0;
   let n = 0;
@@ -171,22 +175,24 @@ export async function buildFileGraph(ctx: AnalyzerContext): Promise<FileGraph> {
     const targets = edges.get(from) ?? new Set<string>();
     const specs: string[] = [];
     // Type-only imports are erased at runtime, so they do not create load-order coupling.
+    const typeSpecs: string[] = [];
     for (const imp of sf.getImportDeclarations()) {
-      if (imp.isTypeOnly()) continue;
       const named = imp.getNamedImports();
-      if (
-        named.length > 0 &&
-        !imp.getDefaultImport() &&
-        !imp.getNamespaceImport() &&
-        named.every((n) => n.isTypeOnly())
-      )
-        continue;
-      specs.push(imp.getModuleSpecifierValue());
+      const typeOnly =
+        imp.isTypeOnly() ||
+        (named.length > 0 &&
+          !imp.getDefaultImport() &&
+          !imp.getNamespaceImport() &&
+          named.every((n) => n.isTypeOnly()));
+      (typeOnly ? typeSpecs : specs).push(imp.getModuleSpecifierValue());
     }
     for (const exp of sf.getExportDeclarations()) {
-      if (exp.isTypeOnly()) continue;
       const s = exp.getModuleSpecifierValue();
-      if (s) specs.push(s);
+      if (s) (exp.isTypeOnly() ? typeSpecs : specs).push(s);
+    }
+    for (const spec of typeSpecs) {
+      const r = resolveSpecifier(from, spec, files, aliases);
+      if (r && r !== "external") typeReferenced.add(r);
     }
     for (const call of sf.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const expr = call.getExpression();
@@ -204,7 +210,7 @@ export async function buildFileGraph(ctx: AnalyzerContext): Promise<FileGraph> {
     }
     edges.set(from, targets);
   }
-  return { nodes: nodes.sort(), edges, externalEdges, unresolved, loc };
+  return { nodes: nodes.sort(), edges, externalEdges, unresolved, loc, typeReferenced };
 }
 
 /** Directory used for aggregation: two path segments deep (e.g. `src/components`), or the top level. */
@@ -399,7 +405,9 @@ export const architectureAnalyzer: Analyzer<ArchitectureMetrics> = {
       (n) =>
         n.fanIn === 0 &&
         n.fanOut === 0 &&
+        !fg.typeReferenced.has(n.path) &&
         !testPaths.has(n.path) &&
+        !isAuxiliaryPath(n.path) &&
         !/(^|\/)(index|main|app|server|cli|page|layout|route|middleware|proxy|worker)\.[cm]?[jt]sx?$/.test(
           n.path,
         ) &&

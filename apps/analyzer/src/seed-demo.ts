@@ -4,6 +4,8 @@
  *
  * Usage: pnpm seed:demo            (env: DATABASE_URL, DEMO_REPO_OWNER, DEMO_REPO_NAME, DEMO_COMMITS)
  */
+
+import { runGit } from "@repolens/analysis";
 import { analyses, analysisSteps, createDatabase, repositories } from "@repolens/database";
 import { ANALYZER_VERSION, STEP_KEYS, STEP_LABELS } from "@repolens/shared";
 import { and, eq } from "drizzle-orm";
@@ -59,19 +61,34 @@ try {
   logger.info({ repositoryId: repo.id, fullName, refs }, "seeding demo repository");
 
   for (const ref of refs) {
+    // Resolve tags and branches to a commit so re-running the seed is idempotent.
+    const isSha = /^[0-9a-f]{40}$/i.test(ref);
+    let sha = ref;
+    if (!isSha) {
+      const { stdout } = await runGit(["ls-remote", repo.cloneUrl, ref, `${ref}^{}`], {
+        cwd: process.cwd(),
+        timeoutMs: 60_000,
+      });
+      const lines = stdout.trim().split("\n").filter(Boolean);
+      // Annotated tags list the tag object first and the peeled commit (^{}) second; prefer peeled.
+      const peeled = lines.find((l) => l.endsWith("^{}"));
+      const resolved = (peeled ?? lines[0])?.split(/\s+/)[0];
+      if (!resolved) throw new Error(`could not resolve ${ref} on ${repo.cloneUrl}`);
+      sha = resolved;
+    }
     const existing = await db
       .select({ id: analyses.id, status: analyses.status })
       .from(analyses)
       .where(
         and(
           eq(analyses.repositoryId, repo.id),
-          eq(analyses.commitSha, ref),
+          eq(analyses.commitSha, sha),
           eq(analyses.status, "completed"),
         ),
       )
       .limit(1);
     if (existing[0]) {
-      logger.info({ ref }, "already analyzed; skipping");
+      logger.info({ ref, sha }, "already analyzed; skipping");
       continue;
     }
     const [analysis] = await db
@@ -80,7 +97,7 @@ try {
         repositoryId: repo.id,
         requestedByUserId: null,
         status: "queued",
-        branch: /^[0-9a-f]{40}$/i.test(ref) ? null : ref,
+        branch: isSha ? null : ref,
         analyzerVersion: ANALYZER_VERSION,
       })
       .returning({ id: analyses.id });
@@ -102,7 +119,7 @@ try {
         network: config.network,
       },
       analysis.id,
-      ref,
+      sha,
     );
     const [done] = await db
       .select({ status: analyses.status, healthScore: analyses.healthScore, error: analyses.error })
@@ -110,7 +127,7 @@ try {
       .where(eq(analyses.id, analysis.id));
     if (done?.status !== "completed")
       throw new Error(`demo analysis for ${ref} failed: ${done?.error}`);
-    logger.info({ ref, healthScore: done.healthScore }, "demo analysis completed");
+    logger.info({ ref, sha, healthScore: done.healthScore }, "demo analysis completed");
   }
   logger.info("demo seed finished");
 } finally {

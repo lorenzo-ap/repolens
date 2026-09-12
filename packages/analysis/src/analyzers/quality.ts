@@ -4,6 +4,7 @@ import { Node, SyntaxKind } from "ts-morph";
 import { collectFunctions, maxNestingDepth } from "../ast/functions";
 import { repoPathOf } from "../ast/project";
 import { finding, pluralize, snippet } from "../findings";
+import { isDeclarationFile } from "../fs/languages";
 import type { Analyzer, AnalyzerContext, AnalyzerResult } from "../types";
 import { throwIfAborted } from "../types";
 
@@ -11,6 +12,7 @@ export const LONG_FUNCTION_LINES = 60;
 export const MAX_PARAMS = 5;
 export const MAX_NESTING = 4;
 const DUPLICATE_WINDOW = 6;
+const DUPLICATE_MIN_CHARS = 160;
 const MAX_PER_RULE = 100;
 
 interface DuplicateOccurrence {
@@ -34,6 +36,10 @@ function normalizeLine(line: string): string | null {
     return null;
   if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return null;
   if (/^(import|export)\b/.test(t)) return null;
+  // Type-level boilerplate (type parameters, signature members, overload params) is repetitive by
+  // nature and not the duplication a maintainer would refactor.
+  if (/^[A-Z][\w$]* extends\b/.test(t)) return null;
+  if (/^(readonly )?[\w$]+\??:\s*[^=]+[,;]?$/.test(t) && !/[(){}]/.test(t)) return null;
   return t.replace(/\s+/g, " ");
 }
 
@@ -199,7 +205,7 @@ export const qualityAnalyzer: Analyzer<QualityMetrics> = {
     const dupReported = new Set<string>();
 
     for (const f of ctx.files) {
-      if (!f.isSource || f.isTest) continue;
+      if (!f.isSource || f.isTest || isDeclarationFile(f.path)) continue;
       if (++n % 50 === 0) throwIfAborted(ctx.signal);
       let text: string;
       try {
@@ -260,7 +266,7 @@ export const qualityAnalyzer: Analyzer<QualityMetrics> = {
       for (let i = 0; i + DUPLICATE_WINDOW <= normalized.length; i++) {
         const window = normalized.slice(i, i + DUPLICATE_WINDOW);
         const key = window.map((w) => w.text).join("\n");
-        if (key.length < 120) continue; // too little content to be meaningful
+        if (key.length < DUPLICATE_MIN_CHARS) continue; // too little content to be meaningful
         const list = hashes.get(key) ?? [];
         list.push({ file: f.path, line: window[0]?.line ?? 1 });
         hashes.set(key, list);
