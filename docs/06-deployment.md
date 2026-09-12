@@ -219,8 +219,21 @@ pushes both Railway services with `railway up`, checking out the commit CI teste
 whatever `main` points at by then. Neither Railway service is connected to GitHub, so this
 workflow is the only path code takes to production.
 
-Changes to `.railway/railway.ts` are planned on the pull request and applied on merge by
-`railway-config.yml`; the apply replays the reviewed plan rather than re-evaluating the file.
+Changes to `.railway/railway.ts` are planned on the pull request by `railway-config.yml`, which
+prints the diff into the job summary so it is reviewed alongside the code. **Applying is manual**:
+
+```bash
+railway config plan        # read it
+railway config apply       # destructive changes are marked before confirmation
+```
+
+Railway's own `railwayapp/config` action would automate the apply, but it runs `npm install` at
+the repository root and npm cannot resolve this workspace's `workspace:*` dependencies, so it
+fails before it plans. Infrastructure changes here are rare enough to be worth a human at the
+keyboard.
+
+Both Railway workflows skip cleanly when `RAILWAY_TOKEN` is absent, so the repository stays green
+before it is connected to Railway.
 
 ### Rollback
 

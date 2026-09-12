@@ -1,53 +1,61 @@
 name: Railway config
 
-# Plans .railway/railway.ts on every pull request that touches it and applies the reviewed plan
-# when that pull request merges. Merging is the approval: the apply job replays the pinned plan
-# rather than re-evaluating the file, so what was reviewed is what is applied.
+# Evaluates .railway/railway.ts against the live Railway environment on pull requests that touch
+# it, so an invalid file or an unexpected diff shows up in review rather than at deploy time.
+#
+# This deliberately does not use railwayapp/config. That action runs `npm install` at the
+# repository root, and npm cannot resolve this workspace's `workspace:*` dependencies, so it
+# fails before it reaches the plan. Applying is a manual, reviewed step — see
+# docs/06-deployment.md — because infrastructure changes here are rare and worth a human at the
+# keyboard.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
     paths:
       - ".railway/**"
-
-permissions:
-  contents: read
-  pull-requests: write
-  actions: read
-  id-token: write
+  workflow_dispatch:
 
 jobs:
   plan:
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      # The plan evaluates .railway/railway.ts, which imports the railway SDK.
-      - run: pnpm install --frozen-lockfile
-      - uses: railwayapp/config@v1
-        with:
-          command: plan
-          railway-token: ${{ secrets.RAILWAY_TOKEN }}
 
-  apply:
-    if: github.event.action == 'closed' && github.event.pull_request.merged && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # Before RAILWAY_TOKEN exists there is nothing to plan against. Skip rather than fail, so a
+      # repository that has not been connected to Railway yet still gets a green pull request.
+      - id: gate
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN is not set; skipping the plan." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.gate.outputs.ready == 'true'
+        uses: pnpm/action-setup@v4
+      - if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: railwayapp/config@v1
-        with:
-          command: apply
-          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+
+      # `railway config plan` evaluates .railway/railway.ts, which imports the railway SDK.
+      - if: steps.gate.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.gate.outputs.ready == 'true'
+        name: Plan
+        run: |
+          npm install -g @railway/cli@latest
+          # Values stay redacted by default, so secrets never reach the log.
+          railway config plan | tee plan.txt
+          {
+            echo '### Railway plan'
+            echo '```'
+            cat plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
