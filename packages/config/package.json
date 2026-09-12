@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "files": [
-    "tsconfig.*.json"
-  ]
+    "tsconfig.*.json",
+    "esbuild-node.mjs"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.node.json": "./tsconfig.node.json",
+    "./tsconfig.next.json": "./tsconfig.next.json",
+    "./esbuild-node.mjs": "./esbuild-node.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
 }

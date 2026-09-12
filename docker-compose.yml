@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: repolens
+      POSTGRES_PASSWORD: repolens
+      POSTGRES_DB: repolens
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repolens"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: { context: ., target: analyzer }
+    command: ["node", "apps/analyzer/dist/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://repolens:repolens@db:5432/repolens
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    build: { context: ., target: api }
+    environment:
+      DATABASE_URL: postgres://repolens:repolens@db:5432/repolens
+      NODE_ENV: production
+      API_PORT: "4000"
+      API_ORIGIN: ${API_ORIGIN:-http://localhost:4000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?set TOKEN_ENCRYPTION_KEY (openssl rand -hex 32)}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      TRUST_PROXY: "true"
+    ports:
+      - "4000:4000"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  analyzer:
+    build: { context: ., target: analyzer }
+    environment:
+      DATABASE_URL: postgres://repolens:repolens@db:5432/repolens
+      NODE_ENV: production
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  seed:
+    build: { context: ., target: analyzer }
+    command: ["node", "apps/analyzer/dist/seed-demo.js"]
+    environment:
+      DATABASE_URL: postgres://repolens:repolens@db:5432/repolens
+      NODE_ENV: production
+      DEMO_REPO_OWNER: ${DEMO_REPO_OWNER:-honojs}
+      DEMO_REPO_NAME: ${DEMO_REPO_NAME:-hono}
+      DEMO_REPO_BRANCH: ${DEMO_REPO_BRANCH:-main}
+      DEMO_REPO_DESCRIPTION: ${DEMO_REPO_DESCRIPTION:-Web framework built on Web Standards}
+      DEMO_COMMITS: ${DEMO_COMMITS:-v4.4.0,v4.8.0,v4.12.0,v4.13.7}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        API_INTERNAL_URL: http://api:4000
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

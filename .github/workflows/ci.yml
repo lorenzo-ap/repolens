@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: repolens
+          POSTGRES_PASSWORD: repolens
+          POSTGRES_DB: repolens_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U repolens"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://repolens:repolens@localhost:5432/repolens_test
+      TEST_DATABASE_URL: postgres://repolens:repolens@localhost:5432/repolens_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:migrate
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: repolens
+          POSTGRES_PASSWORD: repolens
+          POSTGRES_DB: repolens
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U repolens"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://repolens:repolens@localhost:5432/repolens
+      TOKEN_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      API_INTERNAL_URL: http://localhost:4000
+      NEXT_TELEMETRY_DISABLED: "1"
+      # A small, fast repository keeps the CI seed short; the default demo uses honojs/hono.
+      DEMO_REPO_OWNER: vercel
+      DEMO_REPO_NAME: swr
+      DEMO_COMMITS: "v2.2.0,v2.3.0,main"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: pnpm db:migrate
+      - run: pnpm seed:demo
+      - run: pnpm --filter @repolens/api --filter @repolens/web build
+      - name: Start services
+        run: |
+          (cd apps/api && nohup node dist/main.js > /tmp/api.log 2>&1 &)
+          (cd apps/web && nohup pnpm start > /tmp/web.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
+          for i in $(seq 1 30); do curl -sf localhost:3000/ > /dev/null && break; sleep 1; done
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
