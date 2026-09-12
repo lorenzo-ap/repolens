@@ -17,6 +17,7 @@
     "@fastify/rate-limit": "11.2.0",
     "@repolens/database": "workspace:*",
     "@repolens/shared": "workspace:*",
+    "@sentry/node": "10.74.0",
     "drizzle-orm": "0.45.2",
     "fastify": "5.12.4",
     "pg-boss": "12.31.0",

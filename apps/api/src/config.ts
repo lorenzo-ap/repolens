@@ -14,6 +14,8 @@ const ConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   /** Trust X-Forwarded-* headers (behind a reverse proxy). */
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
+  /** Optional. Error reporting stays off entirely while this is unset. */
+  SENTRY_DSN: z.string().url().optional(),
 });
 
 export type ApiConfig = ReturnType<typeof loadConfig>;
@@ -40,6 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     logLevel: c.LOG_LEVEL,
     nodeEnv: c.NODE_ENV,
     trustProxy: c.TRUST_PROXY === "true",
+    sentryDsn: c.SENTRY_DSN ?? null,
     isProduction: c.NODE_ENV === "production",
   };
 }

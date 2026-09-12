@@ -6,6 +6,7 @@ import type { ApiError } from "@repolens/shared";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AppContext } from "./context";
 import { AppError } from "./lib/errors";
+import { reportError } from "./lib/sentry";
 import { analysesRoutes } from "./routes/analyses";
 import { authRoutes } from "./routes/auth";
 import { miscRoutes } from "./routes/misc";
@@ -80,7 +81,10 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
 
   app.setErrorHandler((err: unknown, req, reply) => {
     if (err instanceof AppError) {
-      if (err.statusCode >= 500) req.log.error({ err }, err.message);
+      if (err.statusCode >= 500) {
+        req.log.error({ err }, err.message);
+        reportError(err, { requestId: req.id, method: req.method, url: req.url });
+      }
       const body: ApiError = {
         error: { code: err.code, message: err.message, requestId: req.id, details: err.details },
       };
@@ -114,6 +118,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
       return;
     }
     req.log.error({ err }, "unhandled error");
+    reportError(err, { requestId: req.id, method: req.method, url: req.url });
     const body: ApiError = {
       error: { code: "internal", message: "Something went wrong on our side", requestId: req.id },
     };
