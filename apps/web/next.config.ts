@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   output: "standalone",
   typedRoutes: false,
+  agentRules: false,
   images: { remotePatterns: [{ protocol: "https", hostname: "avatars.githubusercontent.com" }] },
   async rewrites() {
     // The browser talks to the API through the web origin so session cookies stay same-origin.

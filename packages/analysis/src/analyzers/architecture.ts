@@ -273,26 +273,25 @@ export function buildArchitectureGraph(fg: FileGraph): ArchitectureGraph {
     dirFiles.set(d, (dirFiles.get(d) ?? 0) + 1);
   }
   const dirEdgeWeight = new Map<string, number>();
-  const dirAdj = new Map<string, Set<string>>();
   for (const e of fileEdges) {
     const a = moduleDirOf(e.from);
     const b = moduleDirOf(e.to);
     if (a === b) continue;
     const key = `${a}${SEP}${b}`;
     dirEdgeWeight.set(key, (dirEdgeWeight.get(key) ?? 0) + 1);
-    const s = dirAdj.get(a) ?? new Set<string>();
-    s.add(b);
-    dirAdj.set(a, s);
   }
   const dirNames = [...dirLoc.keys()].sort();
-  const dirCycles = stronglyConnectedComponents(dirNames, dirAdj);
-  const inCycleDir = new Set(dirCycles.flat());
+  // Directory-level cycles are derived from file-level ones: aggregating imports to directories
+  // creates trivial back-and-forth edges (a/index -> b/util -> a/types) that are not real cycles.
+  const inCycleDir = new Set<string>();
   const dirCycleEdges = new Set<string>();
-  for (const comp of dirCycles) {
-    const members = new Set(comp);
-    for (const m of comp)
-      for (const to of dirAdj.get(m) ?? [])
-        if (members.has(to)) dirCycleEdges.add(`${m}${SEP}${to}`);
+  for (const key of cycleEdgeKey) {
+    const [from, to] = key.split(SEP) as [string, string];
+    const da = moduleDirOf(from);
+    const db = moduleDirOf(to);
+    inCycleDir.add(da);
+    inCycleDir.add(db);
+    if (da !== db) dirCycleEdges.add(`${da}${SEP}${db}`);
   }
   const dirFanIn = new Map<string, number>();
   const dirFanOut = new Map<string, number>();

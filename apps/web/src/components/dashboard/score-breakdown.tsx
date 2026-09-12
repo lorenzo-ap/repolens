@@ -38,8 +38,10 @@ export function ScoreBreakdown({ scoring }: { scoring: Scoring | null }) {
               <p>
                 <span className="font-semibold">Health score {scoring.healthScore}</span> = weighted
                 mean of the seven category scores. Each category starts from a base score built from
-                its metric inputs (points earned over points available), then loses at most 40
-                points for findings (critical 10, high 4, medium 1.5, low 0.5).
+                its metric inputs (points earned over points available), then loses up to 20 points
+                for findings whose signal is not already an input below (hotspots, hub modules,
+                FIXMEs, parameter counts, non-null density, mixed lockfiles, missing tests),
+                weighted by severity and divided by codebase size.
               </p>
             </section>
             {scoring.categories.map((c) => (

@@ -107,7 +107,7 @@ export function Overview() {
           </CardFooter>
         </Card>
         <Card>
-          <CardBody className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          <CardBody className="grid h-full grid-cols-2 content-center gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
             {CATEGORIES.map((c) => (
               <CategoryTile
                 key={c}
@@ -379,7 +379,7 @@ function DependencyCard({
               tone={d.lockfilePresent ? "good" : "bad"}
             />
             <Stat
-              label="Advisories"
+              label="Advisories (incl. transitive)"
               value={
                 v ? `${v.critical + v.high} high+ · ${v.moderate + v.low} other` : "Not checked"
               }

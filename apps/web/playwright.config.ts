@@ -12,6 +12,10 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // Allows a pre-installed Chromium (CI images, sandboxes) instead of a downloaded one.
+    ...(process.env.PW_CHROMIUM_PATH
+      ? { launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } }
+      : {}),
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },

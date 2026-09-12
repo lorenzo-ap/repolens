@@ -4,7 +4,7 @@ import type { AnalysisSummary } from "@repolens/shared";
 import { CATEGORY_LABELS } from "@repolens/shared";
 import { GitCompareArrows, Users } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { WeeklyCommitsChart } from "@/components/charts/bars";
 import { HealthTrendChart } from "@/components/charts/trend-chart";
@@ -17,13 +17,21 @@ import { NativeSelect } from "@/components/ui/input";
 import { Delta, ScoreText } from "@/components/ui/score";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
 import { useCompare, useHistory } from "@/lib/queries";
-import { fmt, formatDateTime, formatDuration, pct, shortSha, truncateMiddle } from "@/lib/utils";
+import { useUrlParams } from "@/lib/use-url-params";
+import {
+  fmt,
+  formatDate,
+  formatDateTime,
+  formatDuration,
+  pct,
+  shortSha,
+  truncateMiddle,
+} from "@/lib/utils";
 
 export function HistoryView() {
   const repo = useRepo();
   const sp = useSearchParams();
   const router = useRouter();
-  const pathname = usePathname();
   const base = `/r/${repo.owner}/${repo.name}`;
   const completed = useMemo(
     () => repo.analyses.filter((a) => a.status === "completed"),
@@ -40,12 +48,8 @@ export function HistoryView() {
   const compare = useCompare(target?.id ?? null, baseId);
   const history = useHistory(target?.id ?? null);
 
-  const setBase = (id: string) => {
-    const next = new URLSearchParams(sp.toString());
-    if (id) next.set("base", id);
-    else next.delete("base");
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-  };
+  const { update } = useUrlParams();
+  const setBase = (id: string) => update({ base: id || null });
 
   if (!target)
     return (
@@ -135,7 +139,8 @@ export function HistoryView() {
                   .filter((a) => a.id !== target.id)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {shortSha(a.commitSha)} · {formatDateTime(a.finishedAt ?? a.createdAt)}
+                      {shortSha(a.commitSha)}
+                      {a.branch ? ` (${a.branch})` : ""} · {formatDate(a.commitDate ?? a.createdAt)}
                     </option>
                   ))}
               </NativeSelect>
@@ -268,6 +273,11 @@ export function HistoryView() {
                 <Td mono>
                   {shortSha(a.commitSha)}
                   {a.branch ? <span className="ml-1.5 text-fg-subtle">{a.branch}</span> : null}
+                  {a.commitDate ? (
+                    <span className="ml-1.5 font-sans text-fg-subtle">
+                      {formatDate(a.commitDate)}
+                    </span>
+                  ) : null}
                 </Td>
                 <Td>
                   <StatusBadge status={a.status} />
@@ -336,7 +346,7 @@ function FindingList({
   q: string;
 }) {
   return (
-    <div className="rounded-md border border-border">
+    <div className="min-w-0 rounded-md border border-border">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span
           className={

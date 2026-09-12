@@ -133,7 +133,7 @@ export function FindingDetailPanel({
 
       <section className="mt-4 rounded-md border border-accent/30 bg-accent-bg/50 p-3">
         <h3 className="label-caps mb-1 text-accent">Recommendation</h3>
-        <p className="text-sm leading-6 text-fg">{f.recommendation}</p>
+        <p className="text-sm leading-6 text-fg">{linkify(f.recommendation)}</p>
       </section>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -177,5 +177,25 @@ export function FindingDetailPanel({
         </section>
       ) : null}
     </div>
+  );
+}
+
+/** Turns bare https URLs inside plain text into links. */
+function linkify(text: string): React.ReactNode[] {
+  const parts = text.split(/(https?:\/\/[^\s)]+)/g);
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={`${i.toString()}-${part}`}
+        href={part}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-accent hover:underline"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    ),
   );
 }
