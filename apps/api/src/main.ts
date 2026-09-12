@@ -6,6 +6,7 @@ import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import type { AppContext, Queue } from "./context";
 import { createGitHubClient } from "./lib/github";
+import { purgeExpiredSessions } from "./services/auth";
 
 const config = loadConfig();
 const logger = pino({
@@ -55,6 +56,12 @@ if (!ctx.github)
 
 const app = await buildApp(ctx);
 await app.listen({ port: config.port, host: config.host });
+await purgeExpiredSessions(ctx).catch((err) => logger.warn({ err }, "session purge failed"));
+const purgeTimer = setInterval(
+  () => void purgeExpiredSessions(ctx).catch((err) => logger.warn({ err }, "session purge failed")),
+  60 * 60 * 1000,
+);
+purgeTimer.unref();
 
 const shutdown = async (signal: string) => {
   logger.info({ signal }, "shutting down");

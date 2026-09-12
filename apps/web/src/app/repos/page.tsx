@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { ScoreText } from "@/components/ui/score";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
 import { ApiClientError, api } from "@/lib/api";
-import { useAddRepository, useGitHubRepos, useMe } from "@/lib/queries";
+import { useAddRepository, useGitHubRepos, useMe, useOwnRepositories } from "@/lib/queries";
 import { formatBytesKb, relativeTime } from "@/lib/utils";
 
 const AST_LANGUAGES = new Set(["TypeScript", "JavaScript", "Vue", "Svelte", "Astro"]);
@@ -27,6 +27,7 @@ export default function ReposPage() {
   const deferred = useDeferredValue(query);
   const repos = useGitHubRepos(page, deferred);
   const add = useAddRepository();
+  const own = useOwnRepositories(Boolean(me.data?.user));
   const [starting, setStarting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,7 +83,57 @@ export default function ReposPage() {
         </div>
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-md border border-border bg-surface">
+      {own.data?.repositories.length ? (
+        <section className="mt-6" aria-label="Analyzed repositories">
+          <h2 className="label-caps mb-2">In RepoLens</h2>
+          <div className="overflow-hidden rounded-md border border-border bg-surface">
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Repository</Th>
+                  <Th>Last analysis</Th>
+                  <Th numeric>Analyses</Th>
+                  <Th numeric>Score</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {own.data.repositories.map((r) => (
+                  <Tr key={r.repository.id}>
+                    <Td>
+                      <Link
+                        href={`/r/${r.repository.owner}/${r.repository.name}`}
+                        className="font-mono text-xs font-medium text-fg hover:underline"
+                      >
+                        {r.repository.fullName}
+                      </Link>
+                    </Td>
+                    <Td className="text-fg-muted">
+                      {r.activeAnalysis ? (
+                        <Link
+                          href={`/r/${r.repository.owner}/${r.repository.name}/analyses/${r.activeAnalysis.id}`}
+                        >
+                          <StatusBadge status={r.activeAnalysis.status} />
+                        </Link>
+                      ) : r.latestAnalysis ? (
+                        relativeTime(r.latestAnalysis.finishedAt ?? r.latestAnalysis.createdAt)
+                      ) : (
+                        "–"
+                      )}
+                    </Td>
+                    <Td numeric>{r.analysisCount}</Td>
+                    <Td numeric>
+                      <ScoreText score={r.latestAnalysis?.healthScore ?? null} />
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </section>
+      ) : null}
+
+      <h2 className="label-caps mt-6 mb-2">On GitHub</h2>
+      <div className="overflow-hidden rounded-md border border-border bg-surface">
         {repos.isPending ? (
           <div className="space-y-px p-3">
             {Array.from({ length: 8 }, (_, i) => (

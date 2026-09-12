@@ -65,8 +65,8 @@ async function workingTreeBytes(dir: string): Promise<number> {
 /**
  * Fetches a single ref at limited depth into a fresh directory. Uses `git init` + `git fetch` so
  * that both branch names and arbitrary commit SHAs work the same way. Authentication goes through
- * an `Authorization` header passed with `-c http.extraHeader`, which keeps the token out of the
- * URL, the remote config and any error output.
+ * an `Authorization` header configured via the environment, which keeps the token out of argv,
+ * the URL, the remote config and any error output.
  */
 export async function cloneRepository(options: CloneOptions): Promise<CloneResult> {
   assertHttpsGitHubUrl(options.cloneUrl);
@@ -76,14 +76,17 @@ export async function cloneRepository(options: CloneOptions): Promise<CloneResul
   const cleanup = async () => {
     await rm(dir, { recursive: true, force: true, maxRetries: 3 });
   };
-  const authFlags = options.token
-    ? [
-        "-c",
-        `http.extraHeader=Authorization: Basic ${Buffer.from(`x-access-token:${options.token}`).toString("base64")}`,
-      ]
-    : [];
+  // The token travels as git configuration through the environment (GIT_CONFIG_*), never in
+  // argv, so it does not show up in process listings, and never in the URL or the remote config.
+  const authEnv: Record<string, string> = options.token
+    ? {
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "http.extraHeader",
+        GIT_CONFIG_VALUE_0: `Authorization: Basic ${Buffer.from(`x-access-token:${options.token}`).toString("base64")}`,
+      }
+    : {};
   const git = (args: string[], timeoutMs: number = LIMITS.cloneTimeoutMs) =>
-    runGit([...authFlags, ...args], { cwd: dir, timeoutMs, signal: options.signal });
+    runGit(args, { cwd: dir, timeoutMs, signal: options.signal, env: authEnv });
 
   let ref = options.ref?.trim() || "HEAD";
   let branch: string | null = null;

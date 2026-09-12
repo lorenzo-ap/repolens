@@ -29,7 +29,7 @@ import {
   serializeRepository,
   serializeStep,
 } from "../serializers";
-import { findReadableRepositoryById } from "./repositories";
+import { analysisSummaryColumns, findReadableRepositoryById } from "./repositories";
 
 /** Creates a queued analysis, or returns the active one if the repository is already being analyzed. */
 export async function startAnalysis(
@@ -134,7 +134,7 @@ export async function listAnalyses(
   limit: number,
 ): Promise<AnalysisSummary[]> {
   const rows = await ctx.db
-    .select()
+    .select(analysisSummaryColumns)
     .from(analyses)
     .where(eq(analyses.repositoryId, repo.id))
     .orderBy(desc(analyses.createdAt))

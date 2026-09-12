@@ -55,9 +55,31 @@ export function assertCanManage(repo: RepositoryRow, viewer: Viewer | null): Vie
   return viewer;
 }
 
+/** Every analysis column except the (large) metrics document; use for lists and summaries. */
+export const analysisSummaryColumns = {
+  id: analyses.id,
+  repositoryId: analyses.repositoryId,
+  requestedByUserId: analyses.requestedByUserId,
+  status: analyses.status,
+  commitSha: analyses.commitSha,
+  commitDate: analyses.commitDate,
+  branch: analyses.branch,
+  startedAt: analyses.startedAt,
+  finishedAt: analyses.finishedAt,
+  durationMs: analyses.durationMs,
+  error: analyses.error,
+  healthScore: analyses.healthScore,
+  grade: analyses.grade,
+  categoryScores: analyses.categoryScores,
+  findingSummary: analyses.findingSummary,
+  analyzerVersion: analyses.analyzerVersion,
+  createdAt: analyses.createdAt,
+  updatedAt: analyses.updatedAt,
+};
+
 export async function latestAnalyses(ctx: AppContext, repositoryId: string) {
   const rows = await ctx.db
-    .select()
+    .select(analysisSummaryColumns)
     .from(analyses)
     .where(eq(analyses.repositoryId, repositoryId))
     .orderBy(desc(analyses.createdAt))
@@ -161,7 +183,7 @@ export async function listGitHubRepos(
   const localIds = local.map((r) => r.id);
   const recent = localIds.length
     ? await ctx.db
-        .select()
+        .select(analysisSummaryColumns)
         .from(analyses)
         .where(and(inArray(analyses.repositoryId, localIds), isNull(analyses.error)))
         .orderBy(desc(analyses.createdAt))
