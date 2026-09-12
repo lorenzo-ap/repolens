@@ -3,6 +3,8 @@
 #   docker build --target api -t repolens-api .
 #   docker build --target analyzer -t repolens-analyzer .
 #   docker build --target web --build-arg API_INTERNAL_URL=http://api:4000 -t repolens-web .
+#
+# The final `railway` stage bundles the API and the worker into one image; see docs/06-deployment.md.
 
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH NEXT_TELEMETRY_DISABLED=1
@@ -60,3 +62,23 @@ COPY --from=build /app/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
+
+# --- Railway runtime --------------------------------------------------------
+# Railway builds a Dockerfile's final stage and has no equivalent of --target, so this stage
+# carries both server entrypoints and the two Railway services select one with their start
+# command. The `api` and `analyzer` targets above stay the way to build them separately.
+FROM base AS railway
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/analyzer/node_modules ./apps/analyzer/node_modules
+COPY --from=build /app/apps/analyzer/dist ./apps/analyzer/dist
+COPY --from=build /app/apps/analyzer/package.json ./apps/analyzer/package.json
+# Read by apps/analyzer/dist/migrate.js, which the API service runs as its pre-deploy command.
+COPY --from=build /app/packages/database/drizzle ./packages/database/drizzle
+RUN mkdir -p /work && chown node:node /work
+USER node
+EXPOSE 4000
+CMD ["node", "apps/api/dist/main.js"]
