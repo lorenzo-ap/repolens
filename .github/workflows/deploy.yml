@@ -1,29 +1,32 @@
-name: Deploy
+name: Deploy API
 
-# Deploys the API and the analyzer worker to Railway. Runs only after CI succeeds on main, so
-# the tree that passed lint, typecheck, tests, build and the end-to-end suite is the tree that
-# reaches production. The web app is not here: Vercel deploys itself from Git.
+# Builds the API image and rolls it out to Cloud Run. Runs only after CI succeeds on main, so the
+# tree that passed lint, typecheck, tests, build and the end-to-end suite is the tree that ships.
+# The web app is not here: Vercel builds it from Git on every push to main.
+#
+# Requires Workload Identity Federation so no service-account key is stored in the repository.
+# See docs/06-deployment.md for the one-time setup and the variables it needs.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  # Redeploy the current main without waiting for a push, for a rollback or a config change.
   workflow_dispatch:
 
 concurrency:
-  group: deploy-production
+  group: deploy-api-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
-  railway:
+  cloudrun:
     # workflow_run fires for failed runs too; workflow_dispatch has no conclusion to check.
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
-    env:
-      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,34 +34,53 @@ jobs:
           # tested. Pin it so a push landing mid-deploy cannot ship an untested commit.
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
-      # Until the repository is connected to Railway there is nothing to deploy to. Skip rather
+      # Until the project is wired to Google Cloud there is nothing to deploy to. Skip rather
       # than fail every push to main with a missing-credentials error.
       - id: gate
+        env:
+          PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
         run: |
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_TOKEN is not set; skipping the deploy." >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$PROVIDER" ]; then
+            echo "GCP_WORKLOAD_IDENTITY_PROVIDER is not set; skipping the deploy." >> "$GITHUB_STEP_SUMMARY"
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # The API goes first: its pre-deploy command applies the migrations, and the worker must
-      # not pick up jobs against a schema it does not have yet.
       - if: steps.gate.outputs.ready == 'true'
-        name: Deploy API
-        run: npx -y @railway/cli@latest up --service api --ci
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
 
       - if: steps.gate.outputs.ready == 'true'
-        name: Deploy analyzer worker
-        run: npx -y @railway/cli@latest up --service analyzer --ci
+        uses: google-github-actions/setup-gcloud@v2
 
       - if: steps.gate.outputs.ready == 'true'
-        name: Report API health
+        name: Build and push the API image
         run: |
-          url="${{ vars.API_PUBLIC_URL }}"
-          if [ -z "$url" ]; then echo "API_PUBLIC_URL variable not set; skipping"; exit 0; fi
+          gcloud builds submit \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --config deploy/cloudrun/cloudbuild.yaml \
+            --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) .
+
+      # Only the image changes. Environment variables, scaling and the database URL are managed
+      # on the service itself so no secret has to pass through this workflow.
+      - if: steps.gate.outputs.ready == 'true'
+        name: Roll out to Cloud Run
+        run: |
+          gcloud run deploy repolens-api \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region us-central1 \
+            --image "us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/repolens/api:$(git rev-parse --short HEAD)"
+
+      - if: steps.gate.outputs.ready == 'true'
+        name: Verify the deployed API is healthy
+        run: |
+          url=$(gcloud run services describe repolens-api \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region us-central1 --format='value(status.url)')
           for i in $(seq 1 30); do
-            body=$(curl -fsS "$url/api/v1/health" 2>/dev/null) && break
+            body=$(curl -fsS "$url/api/v1/health") && break
             sleep 5
           done
           echo "$body"

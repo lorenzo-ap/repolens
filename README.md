@@ -114,8 +114,8 @@ See `.env.example`. Notable variables: `LIMITS` live in `packages/shared/src/lim
 
 ## Deployment
 
-`docs/06-deployment.md` is the runbook: the Vercel + Railway split, every environment variable per
-service, the GitHub OAuth app settings, DNS, and the launch order.
+`docs/06-deployment.md` is the runbook: the Vercel + Cloud Run + Neon split, every environment
+variable per service, cost limits, and the one-time setup.
 
 ## License
 

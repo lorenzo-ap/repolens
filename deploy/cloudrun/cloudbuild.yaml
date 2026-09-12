@@ -1,0 +1,28 @@
+# Builds the API image from the existing `api` Dockerfile target and pushes it to Artifact
+# Registry. Cloud Build runs `docker build` directly, so unlike `gcloud run deploy --source`
+# — which builds a Dockerfile's final stage — the target can be chosen explicitly.
+#
+# $PROJECT_ID is substituted by Cloud Build. $SHORT_SHA is only set automatically for
+# trigger-driven builds, so manual runs must pass it:
+#   gcloud builds submit --config deploy/cloudrun/cloudbuild.yaml \
+#     --substitutions=SHORT_SHA=$(git rev-parse --short HEAD) .
+steps:
+  - name: gcr.io/cloud-builders/docker
+    # The Dockerfile uses `RUN --mount=type=cache` for the pnpm store, which the legacy builder
+    # rejects. Cloud Build's docker step does not enable BuildKit on its own.
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - build
+      - --target
+      - api
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:$SHORT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:latest
+      - .
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:$SHORT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:latest
+options:
+  logging: CLOUD_LOGGING_ONLY
