@@ -1,4 +1,4 @@
-import { defineRailway, github, postgres, preserve, project, service, volume } from "railway/iac";
+import { defineRailway, postgres, preserve, project, service, volume } from "railway/iac";
 
 /**
  * RepoLens on Railway: the API, the analyzer worker and their PostgreSQL database.
@@ -19,8 +19,6 @@ import { defineRailway, github, postgres, preserve, project, service, volume } f
  */
 const WEB_ORIGIN = "https://repolens.vercel.app";
 
-const REPO = "lorenzo-ap/repolens";
-
 export default defineRailway(() => {
   const db = postgres("postgres");
 
@@ -32,8 +30,13 @@ export default defineRailway(() => {
    */
   const workdir = volume("analyzer-workdir", { sizeMB: 4096 });
 
+  /**
+   * Neither service declares a source. Code reaches Railway through `railway up` from the deploy
+   * workflow, which runs only after CI is green, so the tree that passed the gates is the tree
+   * that gets built. Connecting the GitHub repository as well would give Railway a second,
+   * ungated deploy path for the same commits.
+   */
   const api = service("api", {
-    source: github(REPO, { branch: "main" }),
     start: "node apps/api/dist/main.js",
     /**
      * Migrations run between the build and the deploy, against the same database the new
@@ -67,7 +70,6 @@ export default defineRailway(() => {
   });
 
   const analyzer = service("analyzer", {
-    source: github(REPO, { branch: "main" }),
     start: "node apps/analyzer/dist/main.js",
     // No healthcheck: the worker is a pg-boss consumer and never listens on a port.
     volumeMounts: { "/work": workdir },

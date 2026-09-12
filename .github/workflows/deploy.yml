@@ -1,0 +1,51 @@
+name: Deploy
+
+# Deploys the API and the analyzer worker to Railway. Runs only after CI succeeds on main, so
+# the tree that passed lint, typecheck, tests, build and the end-to-end suite is the tree that
+# reaches production. The web app is not here: Vercel deploys itself from Git.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Redeploy the current main without waiting for a push, for a rollback or a config change.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  railway:
+    # workflow_run fires for failed runs too; workflow_dispatch has no conclusion to check.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # workflow_run checks out the default branch by default, not the commit that was
+          # tested. Pin it so a push landing mid-deploy cannot ship an untested commit.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      # The API goes first: its pre-deploy command applies the migrations, and the worker must
+      # not pick up jobs against a schema it does not have yet.
+      - name: Deploy API
+        run: npx -y @railway/cli@latest up --service api --ci
+
+      - name: Deploy analyzer worker
+        run: npx -y @railway/cli@latest up --service analyzer --ci
+
+      - name: Report API health
+        run: |
+          url="${{ vars.API_PUBLIC_URL }}"
+          if [ -z "$url" ]; then echo "API_PUBLIC_URL variable not set; skipping"; exit 0; fi
+          for i in $(seq 1 30); do
+            body=$(curl -fsS "$url/api/v1/health" 2>/dev/null) && break
+            sleep 5
+          done
+          echo "$body"
+          echo "$body" | grep -q '"status":"ok"'
