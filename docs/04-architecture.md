@@ -170,4 +170,14 @@ lockfile-derived dependency list to the registry's bulk advisory endpoint, which
 installation; it is optional and skipped without network.
 
 **ADR-7: Demo data is produced by the real pipeline.** The seed clones a real public repository and
-analyzes it at three commits. Nothing in the demo is hand-written.
+analyzes it at several commits (tags are resolved to SHAs). Nothing in the demo is hand-written.
+
+**ADR-8: Workspace packages are inlined at build time.** `@repolens/*` packages are published as
+TypeScript source and bundled into each service with esbuild (`packages/config/esbuild-node.mjs`);
+only the app's declared runtime dependencies stay external. The web app uses Next's
+`transpilePackages`. This keeps one source of truth for contracts without a publish step.
+
+**ADR-9: Browser talks to the API through the web origin.** Next.js rewrites `/api/v1/*` to the API,
+so the session cookie is first-party, CORS is not needed in the browser, and a strict CSP
+(`connect-src 'self'`) applies. GitHub tokens for private clones reach the worker only through
+`GIT_CONFIG_*` environment variables, never argv or URLs. Expired sessions are purged hourly.
