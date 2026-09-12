@@ -27,7 +27,7 @@ packages/shared    Zod schemas that double as API contracts and domain types
 packages/database  Drizzle schema, migrations, client, token encryption
 packages/analysis  Deterministic analyzers, scoring model, pipeline runner (fixture-tested)
 packages/config    Shared TypeScript configuration
-docs/              Product, UX, design-system, architecture (ADRs) and analysis-engine specs
+docs/              Product, UX, design-system, architecture (ADRs), analysis-engine and deployment
 ```
 
 Three processes (web, api, analyzer) and one PostgreSQL database. The job queue runs in PostgreSQL
@@ -111,6 +111,11 @@ browser on desktop and mobile viewports.
 See `.env.example`. Notable variables: `LIMITS` live in `packages/shared/src/limits.ts`;
 `ANALYZER_NETWORK=false` disables the npm advisory lookup for offline environments;
 `DEMO_REPO_OWNER`/`DEMO_REPO_NAME`/`DEMO_COMMITS` choose what the seed analyzes.
+
+## Deployment
+
+`docs/06-deployment.md` is the runbook: the Vercel + Railway split, every environment variable per
+service, the GitHub OAuth app settings, DNS, and the launch order.
 
 ## License
 
