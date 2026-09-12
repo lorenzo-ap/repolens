@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 // ---------------------------------------------------------------------------
 
 export function TooltipProvider({ children }: { children: React.ReactNode }) {
-  return <RTooltip.Provider delayDuration={300}>{children}</RTooltip.Provider>;
+  return <RTooltip.Provider delayDuration={250}>{children}</RTooltip.Provider>;
 }
 
 export function Tooltip({
@@ -35,7 +35,7 @@ export function Tooltip({
         <RTooltip.Content
           side={side}
           sideOffset={6}
-          className="anim-fade z-50 max-w-xs rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-fg shadow-popover"
+          className="anim-fade z-50 max-w-xs rounded-sm bg-fg px-2 py-1 text-xs text-fg-inverse shadow-md"
         >
           {content}
         </RTooltip.Content>
@@ -68,25 +68,25 @@ export function DialogContent({
   const width = size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : "max-w-lg";
   return (
     <RDialog.Portal>
-      <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px]" />
+      <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/30 backdrop-blur-[1px]" />
       <RDialog.Content
         className={cn(
-          "anim-zoom fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-surface p-6 shadow-dialog focus:outline-none",
+          "anim-rise fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-bg p-5 shadow-lg focus:outline-none",
           width,
           className,
         )}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <RDialog.Title className="text-lg font-semibold text-fg">{title}</RDialog.Title>
+            <RDialog.Title className="text-base font-semibold text-fg">{title}</RDialog.Title>
             {description ? (
-              <RDialog.Description className="mt-1 text-sm text-fg-muted">
+              <RDialog.Description className="mt-1 text-sm text-fg-secondary">
                 {description}
               </RDialog.Description>
             ) : null}
           </div>
           <RDialog.Close
-            className="rounded-sm p-1 text-fg-subtle hover:bg-surface-2 hover:text-fg"
+            className="-mr-1 -mt-1 rounded-sm p-1 text-fg-tertiary hover:bg-bg-muted hover:text-fg"
             aria-label="Close"
           >
             <X className="size-4" />
@@ -98,48 +98,53 @@ export function DialogContent({
   );
 }
 
+/** Right-hand side panel for detail views; wide enough to read code. */
 export function SheetContent({
   title,
   description,
   children,
   className,
-  side = "right",
+  header,
+  width = "max-w-[640px]",
 }: {
   title: React.ReactNode;
   description?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
-  side?: "right" | "bottom";
+  /** Optional custom header content rendered next to the close button. */
+  header?: React.ReactNode;
+  width?: string;
 }) {
   return (
     <RDialog.Portal>
-      <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/40" />
+      <RDialog.Overlay className="anim-fade fixed inset-0 z-50 bg-black/25" />
       <RDialog.Content
         className={cn(
-          "fixed z-50 flex flex-col border-border bg-surface shadow-dialog focus:outline-none",
-          side === "right"
-            ? "anim-slide inset-y-0 right-0 w-full max-w-xl border-l"
-            : "inset-x-0 bottom-0 max-h-[85vh] rounded-t-lg border-t",
+          "anim-slide fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-bg shadow-lg focus:outline-none",
+          width,
           className,
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div className="min-w-0">
-            <RDialog.Title className="truncate text-base font-semibold text-fg">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-border px-5">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <RDialog.Title className="truncate text-sm font-semibold text-fg">
               {title}
             </RDialog.Title>
             {description ? (
-              <RDialog.Description className="mt-0.5 text-xs text-fg-muted">
+              <RDialog.Description className="truncate text-xs text-fg-tertiary">
                 {description}
               </RDialog.Description>
             ) : null}
           </div>
-          <RDialog.Close
-            className="rounded-sm p-1 text-fg-subtle hover:bg-surface-2 hover:text-fg"
-            aria-label="Close"
-          >
-            <X className="size-4" />
-          </RDialog.Close>
+          <div className="flex shrink-0 items-center gap-2">
+            {header}
+            <RDialog.Close
+              className="rounded-sm p-1 text-fg-tertiary hover:bg-bg-muted hover:text-fg"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </RDialog.Close>
+          </div>
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">{children}</div>
       </RDialog.Content>
@@ -169,7 +174,7 @@ export function DropdownMenuContent({
         align={align}
         sideOffset={6}
         className={cn(
-          "anim-fade z-50 min-w-44 rounded-md border border-border bg-surface p-1 shadow-popover",
+          "anim-rise z-50 min-w-44 rounded-md border border-border bg-bg p-1 shadow-md",
           className,
         )}
       >
@@ -187,8 +192,8 @@ export function DropdownMenuItem({
   return (
     <RDropdown.Item
       className={cn(
-        "flex h-8 cursor-pointer select-none items-center gap-2 rounded-sm px-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-2 [&_svg]:size-4 [&_svg]:text-fg-subtle",
-        destructive && "text-critical data-[highlighted]:bg-critical-bg [&_svg]:text-critical",
+        "flex h-8 cursor-pointer select-none items-center gap-2 rounded-sm px-2 text-sm text-fg outline-none data-[highlighted]:bg-bg-muted [&_svg]:size-3.5 [&_svg]:text-fg-tertiary",
+        destructive && "text-critical data-[highlighted]:bg-critical-subtle [&_svg]:text-critical",
         className,
       )}
       {...props}
@@ -201,11 +206,7 @@ export function DropdownMenuSeparator() {
 }
 
 export function DropdownMenuLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-2 py-1.5 text-2xs uppercase tracking-[0.04em] text-fg-subtle">
-      {children}
-    </div>
-  );
+  return <div className="eyebrow px-2 py-1.5">{children}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ export function PopoverContent({
         align={align}
         sideOffset={6}
         className={cn(
-          "anim-fade z-50 w-72 rounded-md border border-border bg-surface p-3 shadow-popover",
+          "anim-rise z-50 w-72 rounded-md border border-border bg-bg p-3 shadow-md",
           className,
         )}
       >

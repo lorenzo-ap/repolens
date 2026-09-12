@@ -38,6 +38,11 @@ export function formatDate(iso: string | null | undefined): string {
   });
 }
 
+export function formatDateShort(iso: string | null | undefined): string {
+  if (!iso) return "–";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "–";
   return new Date(iso).toLocaleString("en-US", {
@@ -64,9 +69,9 @@ export function formatBytesKb(kb: number | null | undefined): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-export function scoreBand(
-  score: number | null | undefined,
-): "good" | "medium" | "high" | "critical" | "none" {
+export type ScoreBand = "good" | "medium" | "high" | "critical" | "none";
+
+export function scoreBand(score: number | null | undefined): ScoreBand {
   if (score === null || score === undefined) return "none";
   if (score >= 80) return "good";
   if (score >= 60) return "medium";
@@ -74,13 +79,15 @@ export function scoreBand(
   return "critical";
 }
 
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  critical: "Crit",
-  high: "High",
-  medium: "Med",
-  low: "Low",
-  info: "Info",
-};
+/** Qualitative word shown next to a score. */
+export function scoreStatus(score: number | null | undefined): string {
+  if (score === null || score === undefined) return "Not available";
+  if (score >= 90) return "Excellent";
+  if (score >= 80) return "Good";
+  if (score >= 65) return "Fair";
+  if (score >= 50) return "Poor";
+  return "Critical";
+}
 
 export const SEVERITY_FULL: Record<Severity, string> = {
   critical: "Critical",
@@ -91,13 +98,25 @@ export const SEVERITY_FULL: Record<Severity, string> = {
 };
 
 export const CATEGORY_DESCRIPTION: Record<Category, string> = {
-  quality: "Lint and formatter setup, unsafe TypeScript constructs, long functions, empty catches.",
+  quality:
+    "Lint and formatter setup, TypeScript strictness, unsafe constructs, long functions, empty catch blocks.",
   complexity: "Cyclomatic and cognitive complexity of functions across the codebase.",
-  architecture: "Module dependency graph: cycles, hubs, god files and fan-out.",
+  architecture: "Module dependency graph: cycles, hub modules, god files and fan-out.",
   dependencies: "Lockfile hygiene, version ranges, deprecated packages and known advisories.",
   testing: "Test volume, coverage of source areas, focused and skipped tests.",
   maintainability: "Documentation, duplication, file sizes, TODO density and dead exports.",
   gitHealth: "Bus factor, recency, commit sizes and change hotspots.",
+};
+
+/** Route for each category's dedicated page within a repository. */
+export const CATEGORY_ROUTE: Record<Category, string> = {
+  quality: "findings?category=quality",
+  complexity: "complexity",
+  architecture: "architecture",
+  dependencies: "dependencies",
+  testing: "testing",
+  maintainability: "findings?category=maintainability",
+  gitHealth: "git",
 };
 
 export function truncateMiddle(text: string, max = 48): string {
@@ -109,4 +128,10 @@ export function truncateMiddle(text: string, max = 48): string {
 
 export function isMac(): boolean {
   return typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
+/** Appends a query string (without leading ?) to a path that may already have one. */
+export function withQuery(path: string, query: string): string {
+  if (!query) return path;
+  return path.includes("?") ? `${path}&${query}` : `${path}?${query}`;
 }

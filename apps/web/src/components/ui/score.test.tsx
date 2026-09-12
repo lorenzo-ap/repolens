@@ -1,17 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { SeverityBadge, StatusBadge } from "./badge";
-import { Delta, ScoreRing, ScoreText } from "./score";
+import { Delta, HealthScore, ScoreText } from "./score";
 
-describe("ScoreRing", () => {
-  it("announces the score and grade for assistive technology", () => {
-    render(<ScoreRing score={83.4} />);
-    expect(screen.getByRole("img", { name: "Health score: 83 of 100, grade B" })).toBeTruthy();
+describe("HealthScore", () => {
+  it("announces the score and status for assistive technology", () => {
+    render(<HealthScore score={83.4} delta={2.1} />);
+    expect(screen.getByRole("img", { name: "Health score: 83 of 100, Good" })).toBeTruthy();
     expect(screen.getByText("83")).toBeTruthy();
-    expect(screen.getByText("Grade B")).toBeTruthy();
+    expect(screen.getByText("Good")).toBeTruthy();
+    expect(screen.getByText(/\+2\.1 vs previous/)).toBeTruthy();
   });
   it("handles a missing score", () => {
-    render(<ScoreRing score={null} />);
+    render(<HealthScore score={null} />);
     expect(screen.getByRole("img", { name: "Health score: not available" })).toBeTruthy();
   });
 });
@@ -24,7 +25,7 @@ describe("Delta", () => {
     const { container: worse } = render(<Delta value={4} higherIsBetter={false} />);
     expect(worse.querySelector(".text-critical")).toBeTruthy();
     const { container: neutral } = render(<Delta value={-2} higherIsBetter={null} />);
-    expect(neutral.querySelector(".text-fg-muted")).toBeTruthy();
+    expect(neutral.querySelector(".text-fg-secondary")).toBeTruthy();
     const { container: zero } = render(<Delta value={0.04} digits={1} suffix="%" />);
     expect(zero.textContent).toContain("0%");
   });

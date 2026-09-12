@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatDate, shortSha } from "@/lib/utils";
+import { formatDate, formatDateShort, shortSha } from "@/lib/utils";
 
 interface Point {
   id: string;
@@ -22,48 +22,58 @@ interface Point {
   findings: number;
 }
 
-export function HealthTrendChart({
-  analyses,
-  selectedId,
-  onSelect,
-}: {
-  analyses: AnalysisSummary[];
-  selectedId?: string | null;
-  onSelect?: (id: string) => void;
-}) {
-  const points: Point[] = analyses
+export function toPoints(analyses: AnalysisSummary[]): Point[] {
+  return analyses
     .filter((a) => a.status === "completed" && a.healthScore !== null)
     .map((a) => ({
       id: a.id,
       date: a.commitDate ?? a.finishedAt ?? a.createdAt,
       label: formatDate(a.commitDate ?? a.finishedAt ?? a.createdAt),
-      ref: a.branch,
       score: Math.round((a.healthScore ?? 0) * 10) / 10,
       sha: shortSha(a.commitSha),
+      ref: a.branch,
       findings: a.findingSummary?.total ?? 0,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
 
+/**
+ * Health score over time. One series, no decoration; answers "is this getting better?".
+ */
+export function HealthTrendChart({
+  analyses,
+  selectedId,
+  onSelect,
+  height = 160,
+}: {
+  analyses: AnalysisSummary[];
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+  height?: number;
+}) {
+  const points = toPoints(analyses);
   if (points.length < 2) {
     return (
-      <div className="flex h-44 flex-col items-center justify-center text-center">
-        <p className="text-sm text-fg-muted">A trend appears after the second analysis.</p>
+      <div className="flex flex-col items-center justify-center text-center" style={{ height }}>
+        <p className="text-sm text-fg-secondary">A trend appears after the second analysis.</p>
         {points[0] ? (
-          <p className="mt-1 text-xs text-fg-subtle">
+          <p className="mt-1 text-xs text-fg-tertiary">
             Current score {points[0].score} at {points[0].sha}
           </p>
         ) : null}
       </div>
     );
   }
+  const min = Math.min(...points.map((p) => p.score));
+  const floor = Math.max(0, Math.floor((min - 10) / 10) * 10);
 
   return (
     <figure>
-      <div className="h-44">
+      <div style={{ height }}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={points}
-            margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+            margin={{ top: 6, right: 6, bottom: 0, left: 0 }}
             onClick={(state: unknown) => {
               const payload = (state as { activePayload?: Array<{ payload: Point }> } | null)
                 ?.activePayload;
@@ -73,25 +83,26 @@ export function HealthTrendChart({
           >
             <defs>
               <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.16} />
-                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.14} />
+                <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="var(--border)" strokeDasharray="0" vertical={false} />
+            <CartesianGrid stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: "var(--fg-subtle)" }}
+              tick={{ fontSize: 11, fill: "var(--fg-tertiary)" }}
               tickLine={false}
               axisLine={{ stroke: "var(--border)" }}
-              minTickGap={24}
+              minTickGap={32}
+              tickFormatter={(v: string) => formatDateShort(new Date(v).toISOString())}
             />
             <YAxis
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              tick={{ fontSize: 11, fill: "var(--fg-subtle)" }}
+              domain={[floor, 100]}
+              tick={{ fontSize: 11, fill: "var(--fg-tertiary)" }}
               tickLine={false}
               axisLine={false}
-              width={44}
+              width={32}
+              tickCount={4}
             />
             <Tooltip
               cursor={{ stroke: "var(--border-strong)" }}
@@ -99,8 +110,8 @@ export function HealthTrendChart({
                 const p = payload?.[0]?.payload as Point | undefined;
                 if (!active || !p) return null;
                 return (
-                  <div className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs shadow-popover">
-                    <div className="font-mono text-fg-subtle">
+                  <div className="rounded-sm border border-border bg-bg px-2.5 py-1.5 text-xs shadow-md">
+                    <div className="font-mono text-fg-tertiary">
                       {p.sha}
                       {p.ref ? ` · ${p.ref}` : ""}
                     </div>
@@ -108,7 +119,7 @@ export function HealthTrendChart({
                       Score <span className="tabular font-semibold">{p.score}</span> · {p.findings}{" "}
                       findings
                     </div>
-                    <div className="text-fg-subtle">{p.label}</div>
+                    <div className="text-fg-tertiary">{p.label}</div>
                   </div>
                 );
               }}
@@ -116,7 +127,7 @@ export function HealthTrendChart({
             <Area
               type="monotone"
               dataKey="score"
-              stroke="var(--accent)"
+              stroke="var(--chart-1)"
               strokeWidth={1.5}
               fill="url(#trend-fill)"
               isAnimationActive={false}
@@ -127,14 +138,14 @@ export function HealthTrendChart({
                     key={props.payload?.id}
                     cx={props.cx}
                     cy={props.cy}
-                    r={isSelected ? 4 : 2.5}
-                    fill={isSelected ? "var(--accent)" : "var(--surface)"}
-                    stroke="var(--accent)"
+                    r={isSelected ? 3.5 : 2.5}
+                    fill={isSelected ? "var(--chart-1)" : "var(--bg)"}
+                    stroke="var(--chart-1)"
                     strokeWidth={1.5}
                   />
                 );
               }}
-              activeDot={{ r: 4, stroke: "var(--accent)", fill: "var(--accent)" }}
+              activeDot={{ r: 4, stroke: "var(--chart-1)", fill: "var(--chart-1)" }}
             />
           </AreaChart>
         </ResponsiveContainer>

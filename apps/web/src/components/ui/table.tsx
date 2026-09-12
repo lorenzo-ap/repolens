@@ -1,6 +1,10 @@
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Tables are the default for tabular data. Hairline rows, a quiet header, monospace for
+ * identifiers and numbers. Always horizontally scrollable so the page never overflows.
+ */
 export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
     <div className="scrollbar-thin w-full overflow-x-auto">
@@ -10,7 +14,7 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
 }
 
 export function THead({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn("sticky top-0 z-10 bg-surface-2 text-left", className)} {...props} />;
+  return <thead className={cn("bg-bg-subtle text-left", className)} {...props} />;
 }
 
 export function TBody(props: React.HTMLAttributes<HTMLTableSectionElement>) {
@@ -26,7 +30,7 @@ export function Th({
     <th
       scope="col"
       className={cn(
-        "h-8 whitespace-nowrap border-b border-border px-3 text-2xs font-medium uppercase tracking-[0.04em] text-fg-subtle",
+        "eyebrow h-8 whitespace-nowrap border-b border-border px-3 font-medium",
         numeric && "text-right",
         className,
       )}
@@ -46,8 +50,8 @@ export function Tr({
       className={cn(
         "border-b border-border last:border-b-0",
         interactive &&
-          "cursor-pointer hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none",
-        selected && "bg-accent-bg/60 hover:bg-accent-bg/60",
+          "cursor-pointer transition-colors hover:bg-bg-muted focus-visible:bg-bg-muted focus-visible:outline-none",
+        selected && "bg-accent-subtle/70 hover:bg-accent-subtle/70",
         className,
       )}
       {...props}

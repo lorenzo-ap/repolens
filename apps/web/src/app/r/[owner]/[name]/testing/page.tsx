@@ -1,13 +1,13 @@
 import { Suspense } from "react";
-import { HistoryView } from "@/components/history/history-view";
+import { TestingView } from "@/components/categories/testing-view";
 import { Skeleton } from "@/components/ui/feedback";
 
-export const metadata = { title: "History" };
+export const metadata = { title: "Testing" };
 
-export default function HistoryPage() {
+export default function Page() {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <HistoryView />
+      <TestingView />
     </Suspense>
   );
 }

@@ -1,466 +1,385 @@
 "use client";
 
-import type { AnalysisSummary, Category, MetricsDocument } from "@repolens/shared";
-import { CATEGORIES, CATEGORY_LABELS } from "@repolens/shared";
-import { ArrowRight, Flame, Package, TestTube2 } from "lucide-react";
+import type { Category } from "@repolens/shared";
+import { CATEGORIES, CATEGORY_LABELS, SEVERITIES } from "@repolens/shared";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SeverityBars } from "@/components/charts/bars";
 import { HealthTrendChart } from "@/components/charts/trend-chart";
+import { FindingRow } from "@/components/findings/finding-row";
 import { useRepo } from "@/components/repo/context";
-import { SeverityBadge } from "@/components/ui/badge";
-import { Card, CardBody, CardFooter, CardHeader } from "@/components/ui/card";
-import { EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
-import { Tooltip } from "@/components/ui/overlay";
-import { Delta, ScoreBar, ScoreRing, ScoreText } from "@/components/ui/score";
+import { SeverityDot } from "@/components/ui/badge";
+import { FilePath } from "@/components/ui/code";
+import { EmptyState, ErrorState, Skeleton, SkeletonRows } from "@/components/ui/feedback";
+import { Bar, MetricList, MetricRow } from "@/components/ui/metric";
+import { PageHeader } from "@/components/ui/page";
+import { Panel, PanelFooter, PanelHeader } from "@/components/ui/panel";
+import { HealthScore, ScoreRow } from "@/components/ui/score";
 import { useFindings, useMetrics } from "@/lib/queries";
-import {
-  CATEGORY_DESCRIPTION,
-  cn,
-  fmt,
-  formatDuration,
-  pct,
-  relativeTime,
-  shortSha,
-  truncateMiddle,
-} from "@/lib/utils";
+import { CATEGORY_ROUTE, fmt, formatDate, formatDuration, pct, shortSha } from "@/lib/utils";
 import { ScoreBreakdown } from "./score-breakdown";
-
-function previousOf(list: AnalysisSummary[], current: AnalysisSummary): AnalysisSummary | null {
-  const completed = list
-    .filter((a) => a.status === "completed")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const idx = completed.findIndex((a) => a.id === current.id);
-  return idx > 0 ? (completed[idx - 1] ?? null) : null;
-}
 
 export function Overview() {
   const repo = useRepo();
-  const { analysis } = repo;
+  const { analysis, previous } = repo;
   const metrics = useMetrics(analysis?.id ?? null);
   const top = useFindings(analysis?.id ?? null, { limit: 6 });
   const router = useRouter();
-  const base = `/r/${repo.owner}/${repo.name}`;
-  const q = repo.preserveQuery ? `&${repo.preserveQuery}` : "";
 
   if (!analysis) {
     return (
-      <EmptyState
-        title="No analysis to show yet"
-        description={
-          repo.active
-            ? "An analysis is running. This page fills in as soon as it completes."
-            : repo.repository.canManage
-              ? "Run the first analysis to see the health score, findings, architecture and history."
-              : "This repository has not been analyzed."
-        }
-        action={
-          repo.active ? (
-            <Link
-              href={`${base}/analyses/${repo.active.id}`}
-              className="text-sm text-accent hover:underline"
-            >
-              View progress
-            </Link>
-          ) : null
-        }
-      />
+      <>
+        <PageHeader title="Overview" description={repo.repository.description ?? undefined} />
+        <EmptyState
+          title="No completed analysis yet"
+          description={
+            repo.active
+              ? "An analysis is running. This page fills in as soon as it completes."
+              : repo.repository.canManage
+                ? "Run the first analysis to see the health score, findings, architecture and history."
+                : "This repository has not been analyzed."
+          }
+          action={
+            repo.active ? (
+              <Link
+                href={`${repo.base}/analyses/${repo.active.id}`}
+                className="text-sm text-accent hover:underline"
+              >
+                View progress
+              </Link>
+            ) : null
+          }
+        />
+      </>
     );
   }
-  const previous = previousOf(repo.analyses, analysis);
+
   const m = metrics.data?.metrics ?? null;
+  const s = m?.structure ?? null;
+  const summary = analysis.findingSummary;
+  const delta =
+    previous && analysis.healthScore !== null && previous.healthScore !== null
+      ? analysis.healthScore - previous.healthScore
+      : null;
 
   return (
-    <div className="space-y-4">
-      {/* Row 1: score + categories */}
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <Card>
-          <CardBody className="flex items-center gap-5">
-            <ScoreRing score={analysis.healthScore} size={104} />
-            <div className="min-w-0">
-              <p className="label-caps">Health score</p>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="tabular text-2xl font-semibold">
-                  {analysis.healthScore === null ? "–" : Math.round(analysis.healthScore)}
-                </span>
-                <Delta
-                  value={
-                    previous && analysis.healthScore !== null && previous.healthScore !== null
-                      ? analysis.healthScore - previous.healthScore
-                      : null
-                  }
-                  digits={1}
-                />
-              </div>
-              <p className="mt-1 text-xs text-fg-subtle">
-                {shortSha(analysis.commitSha)} ·{" "}
-                {relativeTime(analysis.finishedAt ?? analysis.createdAt)} ·{" "}
-                {formatDuration(analysis.durationMs)}
-              </p>
-            </div>
-          </CardBody>
-          <CardFooter className="flex items-center justify-between">
-            <span>
-              {previous ? `vs previous (${shortSha(previous.commitSha)})` : "First analysis"}
-            </span>
-            <ScoreBreakdown scoring={m?.scoring ?? null} />
-          </CardFooter>
-        </Card>
-        <Card>
-          <CardBody className="grid h-full grid-cols-2 content-center gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            {CATEGORIES.map((c) => (
-              <CategoryTile
+    <>
+      <PageHeader
+        title="Overview"
+        description={repo.repository.description ?? undefined}
+        meta={
+          <>
+            <span className="font-mono">{shortSha(analysis.commitSha)}</span>
+            {analysis.branch ? <span>{analysis.branch}</span> : null}
+            <span>{formatDate(analysis.commitDate ?? analysis.createdAt)}</span>
+            {s ? (
+              <span>
+                {fmt(s.totalFiles)} files · {fmt(s.totalLines)} lines
+              </span>
+            ) : null}
+            <span>analyzed in {formatDuration(analysis.durationMs)}</span>
+          </>
+        }
+        actions={<ScoreBreakdown scoring={m?.scoring ?? null} />}
+      />
+
+      {/* Score and categories */}
+      <section className="grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)]" aria-label="Health">
+        <div>
+          <HealthScore score={analysis.healthScore} delta={previous ? delta : undefined} />
+          <div className="mt-5 border-t border-border pt-4">
+            <div className="eyebrow">Findings</div>
+            <p className="tabular mt-1.5 text-sm text-fg">
+              <span className="text-2xl font-semibold leading-none">{fmt(summary?.total)}</span>
+              <span className="ml-1.5 text-xs text-fg-tertiary">total</span>
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-secondary">
+              {SEVERITIES.filter((sev) => (summary?.bySeverity[sev] ?? 0) > 0).map((sev) => (
+                <li key={sev}>
+                  <Link
+                    href={repo.href("findings", `severity=${sev}`)}
+                    className="inline-flex items-center gap-1.5 hover:text-fg"
+                  >
+                    <SeverityDot severity={sev} />
+                    <span className="tabular">{summary?.bySeverity[sev]}</span> {sev}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 flex items-baseline justify-between">
+            <h2 className="eyebrow">Category scores</h2>
+            {previous ? (
+              <span className="text-2xs text-fg-tertiary">
+                change vs {shortSha(previous.commitSha)}
+              </span>
+            ) : null}
+          </div>
+          <div className="hairlines">
+            {CATEGORIES.map((c: Category) => (
+              <ScoreRow
                 key={c}
-                category={c}
+                label={CATEGORY_LABELS[c]}
                 score={analysis.categoryScores?.[c] ?? null}
-                previous={previous?.categoryScores?.[c] ?? null}
-                href={`${base}/findings?category=${c}${q}`}
+                delta={
+                  previous
+                    ? (analysis.categoryScores?.[c] ?? 0) - (previous.categoryScores?.[c] ?? 0)
+                    : undefined
+                }
+                href={repo.href(CATEGORY_ROUTE[c])}
               />
             ))}
-          </CardBody>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </section>
 
-      {/* Row 2: trend + severity */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Card>
-          <CardHeader
-            title="Health trend"
-            description="Completed analyses of this repository. Click a point to view that analysis."
-          />
-          <CardBody className="pt-2">
+      {/* Trend and severity */}
+      <section className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Panel>
+          <PanelHeader title="Health over time" description="click a point to view that analysis" />
+          <div className="px-4 pb-3 pt-3">
             <HealthTrendChart
               analyses={repo.analyses}
               selectedId={analysis.id}
               onSelect={(id) =>
-                router.push(id === repo.latestCompleted?.id ? base : `${base}?analysis=${id}`)
+                router.push(
+                  id === repo.latestCompleted?.id ? repo.base : `${repo.base}?analysis=${id}`,
+                )
               }
             />
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader
-            title="Findings by severity"
-            description={`${fmt(analysis.findingSummary?.total)} findings in total`}
-          />
-          <CardBody>
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="By severity" />
+          <div className="px-4 py-3">
             <SeverityBars
-              summary={analysis.findingSummary}
-              onSelect={(s) => router.push(`${base}/findings?severity=${s}${q}`)}
+              summary={summary}
+              onSelect={(sev) => router.push(repo.href("findings", `severity=${sev}`))}
             />
-          </CardBody>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </section>
 
-      {/* Row 3: top findings + hotspots */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader
+      {/* Findings and hotspots */}
+      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader
             title="Top findings"
-            description="Most severe first"
+            description="most severe first"
             action={
               <Link
-                href={`${base}/findings${repo.preserveQuery ? `?${repo.preserveQuery}` : ""}`}
+                href={repo.href("findings")}
                 className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
               >
-                All findings <ArrowRight className="size-3" />
+                All findings <ArrowRight className="size-3" aria-hidden />
               </Link>
             }
           />
           {top.isPending ? (
-            <CardBody className="space-y-2">
-              {Array.from({ length: 5 }, (_, i) => (
-                <Skeleton key={`tf-${i.toString()}`} className="h-9" />
-              ))}
-            </CardBody>
+            <SkeletonRows rows={6} />
           ) : top.isError ? (
-            <CardBody>
+            <div className="p-4">
               <ErrorState error={top.error} onRetry={() => top.refetch()} compact />
-            </CardBody>
+            </div>
           ) : top.data.findings.length === 0 ? (
-            <CardBody>
-              <p className="py-6 text-center text-sm text-fg-muted">No findings. Nice.</p>
-            </CardBody>
+            <p className="px-4 py-8 text-center text-sm text-fg-secondary">
+              No findings for this commit.
+            </p>
           ) : (
-            <ul className="divide-y divide-border">
+            <div className="hairlines">
               {top.data.findings.map((f) => (
-                <li key={f.id}>
-                  <Link
-                    href={`${base}/findings?finding=${f.id}${q}`}
-                    className="flex items-start gap-3 px-4 py-2.5 hover:bg-surface-2"
-                  >
-                    <SeverityBadge severity={f.severity} className="mt-0.5" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-fg">{f.title}</span>
-                      <span className="block truncate font-mono text-2xs text-fg-subtle">
-                        {f.filePath ? `${f.filePath}${f.line ? `:${f.line}` : ""}` : f.ruleId}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
+                <FindingRow
+                  key={f.id}
+                  finding={f}
+                  href={repo.href("findings", `finding=${f.id}`)}
+                  showCategory={false}
+                />
               ))}
-            </ul>
+            </div>
           )}
-        </Card>
-        <Card>
-          <CardHeader
+        </Panel>
+        <Panel>
+          <PanelHeader
             title="Hotspots"
-            description="Files that are both complex and frequently changed"
-            action={<Flame className="size-4 text-fg-subtle" aria-hidden />}
+            description="complex files that keep changing"
+            action={
+              <Link
+                href={repo.href("git")}
+                className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
+              >
+                Git history <ArrowRight className="size-3" aria-hidden />
+              </Link>
+            }
           />
           {metrics.isPending ? (
-            <CardBody className="space-y-2">
-              {Array.from({ length: 5 }, (_, i) => (
-                <Skeleton key={`hs-${i.toString()}`} className="h-8" />
-              ))}
-            </CardBody>
+            <SkeletonRows rows={6} />
           ) : metrics.isError ? (
-            <CardBody>
+            <div className="p-4">
               <ErrorState error={metrics.error} onRetry={() => metrics.refetch()} compact />
-            </CardBody>
+            </div>
           ) : !m?.gitHistory?.available || m.gitHistory.hotspots.length === 0 ? (
-            <CardBody>
-              <p className="py-6 text-center text-sm text-fg-muted">
-                {m?.gitHistory?.available
-                  ? "No hotspots: churn and complexity do not overlap."
-                  : "Git history was not available for this analysis."}
-              </p>
-            </CardBody>
+            <p className="px-4 py-8 text-center text-sm text-fg-secondary">
+              {m?.gitHistory?.available
+                ? "No hotspots: churn and complexity do not overlap."
+                : "Git history was not available for this analysis."}
+            </p>
           ) : (
-            <ul className="divide-y divide-border">
-              {m.gitHistory.hotspots.slice(0, 8).map((h) => (
-                <li key={h.file} className="flex items-center gap-3 px-4 py-2">
-                  <Link
-                    href={`${base}/findings?path=${encodeURIComponent(h.file)}${q}`}
-                    className="min-w-0 flex-1 truncate font-mono text-xs text-fg hover:underline"
-                    title={h.file}
-                  >
-                    {truncateMiddle(h.file, 56)}
-                  </Link>
-                  <Tooltip
-                    content={`${h.commits} commits, ${fmt(h.churn)} lines churned, complexity sum ${h.complexity}`}
-                  >
-                    <span className="tabular shrink-0 text-xs text-fg-muted">
-                      {h.commits}c · cc {h.complexity}
-                    </span>
-                  </Tooltip>
-                  <span
-                    className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-3"
-                    aria-hidden
-                  >
-                    <span
-                      className="block h-full rounded-full bg-high"
-                      style={{ width: `${Math.max(6, h.score * 100)}%` }}
-                    />
+            <div className="hairlines">
+              {m.gitHistory.hotspots.slice(0, 6).map((h) => (
+                <Link
+                  key={h.file}
+                  href={repo.href("findings", `path=${encodeURIComponent(h.file)}`)}
+                  className="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-bg-muted"
+                >
+                  <FilePath path={h.file} className="min-w-0 flex-1" />
+                  <span className="tabular hidden w-20 shrink-0 whitespace-nowrap text-right text-xs text-fg-tertiary sm:block">
+                    {h.commits} commits
                   </span>
-                </li>
+                  <span className="tabular w-12 text-right text-xs text-fg-secondary">
+                    cc {h.complexity}
+                  </span>
+                  <Bar
+                    value={h.score}
+                    max={Math.max(0.001, m.gitHistory?.hotspots[0]?.score ?? 1)}
+                    tone="high"
+                    className="w-14 shrink-0"
+                  />
+                </Link>
               ))}
-            </ul>
+            </div>
           )}
-        </Card>
-      </div>
+        </Panel>
+      </section>
 
-      {/* Row 4: dependency + testing summaries */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DependencyCard m={m} loading={metrics.isPending} base={base} q={q} />
-        <TestingCard m={m} loading={metrics.isPending} base={base} q={q} />
-      </div>
-    </div>
+      {/* Dependencies and testing summaries */}
+      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Panel>
+          <PanelHeader
+            title="Dependencies"
+            action={<PanelLink href={repo.href("dependencies")} />}
+          />
+          <div className="px-4 py-1">
+            {metrics.isPending ? (
+              <Skeleton className="my-3 h-24" />
+            ) : !m?.dependencies ? (
+              <p className="py-6 text-sm text-fg-secondary">
+                The dependencies analyzer did not run.
+              </p>
+            ) : (
+              <MetricList>
+                <MetricRow
+                  label="Direct dependencies"
+                  value={`${fmt(m.dependencies.direct)} + ${fmt(m.dependencies.directDev)} dev`}
+                />
+                <MetricRow
+                  label="Lockfile"
+                  value={m.dependencies.lockfilePresent ? m.dependencies.lockfileType : "missing"}
+                  tone={m.dependencies.lockfilePresent ? undefined : "bad"}
+                />
+                <MetricRow
+                  label="Known advisories"
+                  hint="incl. transitive"
+                  value={
+                    m.dependencies.vulnerabilities
+                      ? `${m.dependencies.vulnerabilities.critical + m.dependencies.vulnerabilities.high} high+ · ${m.dependencies.vulnerabilities.moderate + m.dependencies.vulnerabilities.low} other`
+                      : "not checked"
+                  }
+                  tone={
+                    m.dependencies.vulnerabilities
+                      ? m.dependencies.vulnerabilities.critical +
+                          m.dependencies.vulnerabilities.high >
+                        0
+                        ? "bad"
+                        : "good"
+                      : "muted"
+                  }
+                />
+                <MetricRow
+                  label="Unbounded ranges"
+                  value={fmt(m.dependencies.unpinnedRanges.length)}
+                  tone={m.dependencies.unpinnedRanges.length ? "warn" : undefined}
+                />
+                <MetricRow
+                  label="Deprecated packages"
+                  value={fmt(m.dependencies.deprecatedPackages.length)}
+                  tone={m.dependencies.deprecatedPackages.length ? "warn" : undefined}
+                />
+              </MetricList>
+            )}
+          </div>
+        </Panel>
+        <Panel>
+          <PanelHeader title="Testing" action={<PanelLink href={repo.href("testing")} />} />
+          <div className="px-4 py-1">
+            {metrics.isPending ? (
+              <Skeleton className="my-3 h-24" />
+            ) : !m?.testing ? (
+              <p className="py-6 text-sm text-fg-secondary">The testing analyzer did not run.</p>
+            ) : (
+              <MetricList>
+                <MetricRow
+                  label="Frameworks"
+                  value={
+                    m.testing.frameworks.length ? m.testing.frameworks.join(", ") : "none detected"
+                  }
+                  tone={m.testing.frameworks.length ? undefined : "bad"}
+                />
+                <MetricRow
+                  label="Test files"
+                  value={`${fmt(m.testing.testFiles)} of ${fmt(m.testing.sourceFiles)} source files`}
+                />
+                <MetricRow label="Test cases" value={fmt(m.testing.testCases)} />
+                <MetricRow
+                  label="Test-to-source lines"
+                  value={pct(m.testing.testToSourceRatio)}
+                  tone={
+                    m.testing.testToSourceRatio >= 0.25
+                      ? "good"
+                      : m.testing.testToSourceRatio >= 0.1
+                        ? "warn"
+                        : "bad"
+                  }
+                />
+                <MetricRow
+                  label="Untested areas"
+                  value={fmt(m.testing.sourceDirsWithoutTests.length)}
+                  tone={m.testing.sourceDirsWithoutTests.length ? "warn" : "good"}
+                />
+              </MetricList>
+            )}
+          </div>
+        </Panel>
+      </section>
+
+      <PanelFooterNote />
+    </>
   );
 }
 
-function CategoryTile({
-  category,
-  score,
-  previous,
-  href,
-}: {
-  category: Category;
-  score: number | null;
-  previous: number | null;
-  href: string;
-}) {
+function PanelLink({ href }: { href: string }) {
   return (
     <Link
       href={href}
-      className="group block min-w-0 rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-ring"
+      className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
     >
-      <Tooltip content={CATEGORY_DESCRIPTION[category]} side="bottom">
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-xs text-fg-muted group-hover:text-fg">
-              {CATEGORY_LABELS[category]}
-            </span>
-            <Delta
-              value={score !== null && previous !== null ? score - previous : null}
-              digits={0}
-              className="text-2xs"
-            />
-          </div>
-          <div className="mt-0.5 flex items-baseline gap-1">
-            <ScoreText score={score} className="text-lg" />
-            <span className="text-2xs text-fg-subtle">/100</span>
-          </div>
-          <ScoreBar score={score} className="mt-1.5" />
-        </div>
-      </Tooltip>
+      Details <ArrowRight className="size-3" aria-hidden />
     </Link>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: "good" | "bad" | "warn";
-}) {
+function PanelFooterNote() {
+  const repo = useRepo();
+  if (!repo.repository.isDemo) return null;
   return (
-    <div className="min-w-0">
-      <div className="text-2xs uppercase tracking-[0.04em] text-fg-subtle">{label}</div>
-      <div
-        className={cn(
-          "tabular mt-0.5 truncate text-sm font-medium",
-          tone === "good" && "text-good",
-          tone === "bad" && "text-critical",
-          tone === "warn" && "text-medium",
-        )}
-      >
-        {value}
-      </div>
-    </div>
+    <p className="mt-8 text-xs text-fg-tertiary">
+      Demo data: this repository was analyzed by the same pipeline that runs for connected
+      repositories. Nothing here is hand-written.
+    </p>
   );
 }
 
-function DependencyCard({
-  m,
-  loading,
-  base,
-  q,
-}: {
-  m: MetricsDocument | null;
-  loading: boolean;
-  base: string;
-  q: string;
-}) {
-  const d = m?.dependencies ?? null;
-  const v = d?.vulnerabilities ?? null;
-  return (
-    <Card>
-      <CardHeader
-        title="Dependency health"
-        description={
-          d
-            ? `${d.lockfileType === "none" ? "No lockfile" : `${d.lockfileType} lockfile`} · ${fmt(d.resolvedPackages)} resolved packages`
-            : undefined
-        }
-        action={
-          <Link
-            href={`${base}/findings?category=dependencies${q}`}
-            className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-          >
-            <Package className="size-3.5" /> Findings
-          </Link>
-        }
-      />
-      <CardBody>
-        {loading ? (
-          <Skeleton className="h-16" />
-        ) : !d ? (
-          <p className="text-sm text-fg-muted">The dependencies analyzer did not run.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-            <Stat label="Direct" value={`${fmt(d.direct)} + ${fmt(d.directDev)} dev`} />
-            <Stat
-              label="Lockfile"
-              value={d.lockfilePresent ? "Committed" : "Missing"}
-              tone={d.lockfilePresent ? "good" : "bad"}
-            />
-            <Stat
-              label="Advisories (incl. transitive)"
-              value={
-                v ? `${v.critical + v.high} high+ · ${v.moderate + v.low} other` : "Not checked"
-              }
-              tone={
-                v
-                  ? v.critical + v.high > 0
-                    ? "bad"
-                    : v.moderate + v.low > 0
-                      ? "warn"
-                      : "good"
-                  : undefined
-              }
-            />
-            <Stat
-              label="Hygiene"
-              value={`${d.unpinnedRanges.length} unbounded · ${d.deprecatedPackages.length} deprecated`}
-              tone={d.unpinnedRanges.length + d.deprecatedPackages.length > 0 ? "warn" : "good"}
-            />
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
-
-function TestingCard({
-  m,
-  loading,
-  base,
-  q,
-}: {
-  m: MetricsDocument | null;
-  loading: boolean;
-  base: string;
-  q: string;
-}) {
-  const t = m?.testing ?? null;
-  return (
-    <Card>
-      <CardHeader
-        title="Testing health"
-        description={
-          t
-            ? t.frameworks.length
-              ? t.frameworks.join(", ")
-              : "No test framework detected"
-            : undefined
-        }
-        action={
-          <Link
-            href={`${base}/findings?category=testing${q}`}
-            className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-          >
-            <TestTube2 className="size-3.5" /> Findings
-          </Link>
-        }
-      />
-      <CardBody>
-        {loading ? (
-          <Skeleton className="h-16" />
-        ) : !t ? (
-          <p className="text-sm text-fg-muted">The testing analyzer did not run.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-            <Stat label="Test files" value={`${fmt(t.testFiles)} / ${fmt(t.sourceFiles)} src`} />
-            <Stat label="Test cases" value={fmt(t.testCases)} />
-            <Stat
-              label="Test:source lines"
-              value={pct(t.testToSourceRatio)}
-              tone={
-                t.testToSourceRatio >= 0.25 ? "good" : t.testToSourceRatio >= 0.1 ? "warn" : "bad"
-              }
-            />
-            <Stat
-              label="Untested areas"
-              value={fmt(t.sourceDirsWithoutTests.length)}
-              tone={t.sourceDirsWithoutTests.length ? "warn" : "good"}
-            />
-          </div>
-        )}
-      </CardBody>
-    </Card>
-  );
-}
+// Re-exported for pages that need the footer style without the panel header.
+export { PanelFooter };

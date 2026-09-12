@@ -5,14 +5,25 @@ import { expect, test } from "@playwright/test";
  * running with a seeded demo repository (`pnpm seed:demo`).
  */
 
+type Page = import("@playwright/test").Page;
+
+/** Follows a sidebar link; on narrow screens the sidebar lives in a sheet behind a menu button. */
+async function goToSection(page: Page, name: string | RegExp) {
+  const opener = page.getByRole("button", { name: "Open repository navigation" });
+  if (await opener.isVisible()) await opener.click();
+  await page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name }).click();
+}
+
+const findingRows = (page: Page) => page.locator("[id^='finding-row-']");
+
 test.describe("landing", () => {
   test("explains the product and links to the demo", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "Know where a codebase is healthy",
+      "Understand your codebase before you change it.",
     );
-    await expect(page.getByText("Demo · latest analysis")).toBeVisible();
-    await page.getByRole("link", { name: /Explore the demo/ }).click();
+    await expect(page.getByText("Live demo", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: /Explore demo/ }).click();
     await expect(page).toHaveURL(/\/r\/[^/]+\/[^/]+$/);
   });
 });
@@ -24,10 +35,10 @@ test.describe("demo repository", () => {
   });
 
   test("dashboard shows score, categories, trend and findings", async ({ page }) => {
-    await expect(page.getByText("Demo data")).toBeVisible();
+    await expect(page.getByText("Demo", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("img", { name: /Health score: \d+ of 100/ })).toBeVisible();
     await expect(page.getByText("Code quality").first()).toBeVisible();
-    await expect(page.getByText("Health trend")).toBeVisible();
+    await expect(page.getByText("Health over time")).toBeVisible();
     await expect(page.getByText("Top findings")).toBeVisible();
     await page.getByRole("button", { name: "How is this computed?" }).click();
     await expect(page.getByText("Score derivation")).toBeVisible();
@@ -39,12 +50,9 @@ test.describe("demo repository", () => {
   });
 
   test("findings can be filtered, sorted, searched and opened", async ({ page }) => {
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .getByRole("link", { name: /^Findings/ })
-      .click();
+    await goToSection(page, /^Findings/);
     await expect(page).toHaveURL(/\/findings/);
-    const rows = page.locator("tbody tr");
+    const rows = findingRows(page);
     await expect(rows.first()).toBeVisible();
     const initialCount = await page
       .getByText(/\d+ findings?$/)
@@ -57,7 +65,7 @@ test.describe("demo repository", () => {
     await page.getByRole("checkbox", { name: /High/ }).first().click();
     await expect(page).toHaveURL(/severity=high/);
     await page.keyboard.press("Escape");
-    await expect(rows.first().locator("td").first()).toContainText(/High/i);
+    await expect(rows.first()).toContainText(/High/i);
     await page.getByRole("button", { name: "Remove filter" }).first().click();
     await expect(page).not.toHaveURL(/severity=high/);
 
@@ -90,7 +98,7 @@ test.describe("demo repository", () => {
 
   test("keyboard navigation works in findings", async ({ page }) => {
     await page.goto((await page.url()).replace(/\/?$/, "/findings"));
-    await expect(page.locator("tbody tr").first()).toBeVisible();
+    await expect(findingRows(page).first()).toBeVisible();
     await page.keyboard.press("j");
     await page.keyboard.press("j");
     await page.keyboard.press("Enter");
@@ -102,10 +110,7 @@ test.describe("demo repository", () => {
   });
 
   test("architecture graph renders and drills into a directory", async ({ page }) => {
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .getByRole("link", { name: "Architecture" })
-      .click();
+    await goToSection(page, "Architecture");
     await expect(page.getByText(/\d+ nodes · \d+ edges/)).toBeVisible();
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
     await page.locator(".react-flow__node").first().click();
@@ -117,12 +122,24 @@ test.describe("demo repository", () => {
     await expect(page.locator(".react-flow__node").first()).toBeVisible();
   });
 
-  test("history compares two analyses", async ({ page }) => {
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .getByRole("link", { name: /^History/ })
-      .click();
-    await expect(page.getByText("Compare analyses")).toBeVisible();
+  test("category pages render their metrics", async ({ page }) => {
+    const pages: Array<[string, string]> = [
+      ["Dependencies", "dependencies"],
+      ["Testing", "testing"],
+      ["Complexity", "complexity"],
+      ["Git history", "git"],
+    ];
+    for (const [name, segment] of pages) {
+      await goToSection(page, name);
+      await expect(page).toHaveURL(new RegExp(`/${segment}(\\?|$)`));
+      await expect(page.getByRole("dialog")).toBeHidden();
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(name);
+    }
+  });
+
+  test("analyses page compares two analyses", async ({ page }) => {
+    await goToSection(page, /^Analyses/);
+    await expect(page.getByText("Compare", { exact: true })).toBeVisible();
     await expect(page.getByText("New findings")).toBeVisible();
     await expect(page.getByText("Resolved findings")).toBeVisible();
     await expect(page.getByRole("cell", { name: "Test cases" })).toBeVisible();
@@ -130,15 +147,13 @@ test.describe("demo repository", () => {
     await expect(page.getByRole("link", { name: "View", exact: true }).first()).toBeVisible();
   });
 
-  test("older analyses can be selected and flagged as stale", async ({ page }) => {
-    await page
-      .getByRole("navigation", { name: "Sections" })
-      .getByRole("link", { name: /^History/ })
-      .click();
+  test("older analyses can be selected and switched back to latest", async ({ page }) => {
+    await goToSection(page, /^Analyses/);
     await page.getByRole("link", { name: "View", exact: true }).first().click();
     await expect(page).toHaveURL(/analysis=/);
-    await expect(page.getByText(/Viewing the analysis from/)).toBeVisible();
-    await page.getByRole("link", { name: "View latest" }).click();
+    const opener = page.getByRole("button", { name: "Open repository navigation" });
+    if (await opener.isVisible()) await opener.click();
+    await page.getByRole("link", { name: "Switch to latest" }).click();
     await expect(page).not.toHaveURL(/analysis=/);
   });
 
@@ -164,7 +179,10 @@ test.describe("errors and access", () => {
 
   test("theme toggle switches to dark mode", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("button", { name: /Switch to dark theme/ }).click();
-    await expect(page.locator("html")).toHaveClass(/dark/);
+    // Retry the click: the toggle is inert until the page has hydrated.
+    await expect(async () => {
+      await page.getByRole("button", { name: /Switch to dark theme/ }).click();
+      await expect(page.locator("html")).toHaveClass(/dark/, { timeout: 1_000 });
+    }).toPass();
   });
 });

@@ -1,107 +1,140 @@
 # RepoLens — Design System
 
-_Phase 3 output (UI/Visual Designer)._
+_Phase 3 output (UI/Visual Designer), revised in the frontend redesign pass._
 
 ## Direction
 
-Premium, technical, calm. Principles extracted (not copied) from strong developer products:
+Serious, dense, calm. The interface should read like a tool an engineer keeps open all day, not a
+marketing surface. Principles extracted (not copied) from strong developer products:
 
-- **GitHub:** dense tables with generous line height; monospace where identifiers appear.
-- **Linear:** one neutral scale doing most of the work; borders lighter than text; tight radii.
-- **Vercel:** near-monochrome surfaces, strong typographic hierarchy, restraint with colour.
+- **Linear:** one neutral scale does nearly all the work; borders are lighter than text; radii stay
+  tight; the accent appears on links, focus and the active navigation marker and almost nowhere
+  else.
+- **GitHub:** dense lists and tables with generous line height; monospace wherever an identifier,
+  path or number appears.
+- **Vercel:** near-monochrome surfaces, strong typographic hierarchy, black primary buttons.
 - **Sentry / Datadog:** semantic colour reserved for severity and health; charts on quiet grids.
-- **Raycast:** command palette as a first-class navigation primitive.
+- **Raycast:** the command palette is a first-class navigation primitive.
 
-What we avoid: gradients as decoration, glassmorphism, oversized rounded cards, emoji, purple
-accents, hero illustrations, and unbounded whitespace.
+What we deliberately avoid: decorative gradients, glassmorphism, oversized rounded cards, floating
+cards for everything, drop shadows on static content, blobs and illustrations, rainbow category
+colours, giant dashboard headings, and unbounded whitespace.
 
 ## Typography
 
 - **UI:** `Inter` (variable) with system fallback (`ui-sans-serif, system-ui`).
-- **Code / identifiers / numbers in tables:** `JetBrains Mono` with `ui-monospace` fallback,
-  `font-variant-numeric: tabular-nums` everywhere numbers align.
-- Scale (px / line-height): 11/16 caption, 12/16 small, 13/20 body (default), 14/20 body-lg,
-  16/24 h3, 20/28 h2, 28/34 h1, 40/44 display. Weights: 400, 500, 600 only.
-- Letter spacing: -0.01em at ≥20px; uppercase labels at 11px use +0.04em.
+- **Code, paths, identifiers, table numbers:** `JetBrains Mono` with `ui-monospace` fallback.
+  `font-variant-numeric: tabular-nums` (`.tabular`) wherever numbers align.
+- Scale (px / line-height): 11/16 `2xs` captions and eyebrows, 12/18 `xs` metadata and table
+  cells, 13/20 `sm` body (default), 14/22 `base` landing copy, 16/24 `lg` panel titles, 20/28 `xl`
+  page titles, 24/30 `2xl` figures, 32/36 `3xl`, 44/48 `4xl` hero and health score.
+  Weights 400, 500, 600 only.
+- Letter spacing: -0.01em on titles from 20px, -0.02em on the hero and the health number. Uppercase
+  labels (`.eyebrow`) are 11px, +0.06em, `--fg-tertiary`.
+- Page titles are 20px. Content should start high on the screen; no page needs a 32px heading.
 
 ## Spacing and layout
 
-4px base. Scale: 1(4) 2(8) 3(12) 4(16) 5(20) 6(24) 8(32) 10(40) 12(48) 16(64).
-Content max width 1440px; page gutter 24px (16px on mobile). Cards pad 16px; table cells 8px 12px.
+4px base. Application shell: 48px top bar, 224px left sidebar (collapses into a sheet below
+`lg`), content column max 1280px with 16/24/32px gutters at `sm`/`md`/`lg`. Marketing pages use a
+1120px column.
+
+Lists inside panels are hairline-divided rows (`.hairlines`), 8px vertical padding, 16px horizontal.
+Panel headers are 40px. Tables use 8px 12px cells and a `--bg-subtle` header.
 
 ## Colour
 
-Neutral scale is the backbone. Light and dark are both first-class; tokens are defined for both.
+One neutral scale, both themes first-class. Tokens live in `apps/web/src/app/globals.css` and are
+exposed to Tailwind through `@theme inline` (`bg-bg`, `text-fg-secondary`, `border-border`, …).
 
 | Token | Light | Dark | Use |
 | --- | --- | --- | --- |
-| `--bg` | #fafafa | #0a0a0b | page |
-| `--surface` | #ffffff | #111113 | cards, panels |
-| `--surface-2` | #f4f4f5 | #18181b | table headers, hover |
-| `--border` | #e4e4e7 | #27272a | default border |
-| `--border-strong` | #d4d4d8 | #3f3f46 | inputs, emphasised |
-| `--fg` | #18181b | #fafafa | primary text |
-| `--fg-muted` | #52525b | #a1a1aa | secondary text |
-| `--fg-subtle` | #71717a | #71717a | captions |
-| `--accent` | #2563eb | #3b82f6 | actions, links, focus |
-| `--accent-fg` | #ffffff | #ffffff | on accent |
+| `--bg` | #ffffff | #0e0e10 | page and panels |
+| `--bg-subtle` | #fafafa | #121214 | sidebar, table headers, code blocks |
+| `--bg-muted` | #f4f4f5 | #19191d | hover, inline code, skeletons |
+| `--bg-emphasis` | #ededef | #222227 | pressed segments, bar tracks |
+| `--border` | #e6e6e9 | #26262c | hairlines and panel borders |
+| `--border-strong` | #d4d4d9 | #38383f | inputs, selects, emphasised borders |
+| `--fg` | #18181b | #ededf0 | primary text, primary buttons |
+| `--fg-secondary` | #5f5f6b | #a3a3ae | secondary text |
+| `--fg-tertiary` | #8a8a96 | #71717c | captions, eyebrows, disabled |
+| `--accent` | #3b50c9 | #9aabff | links, focus ring, active nav marker, trend line |
+| `--accent-subtle` | #eef0fb | #1d2242 | accent tint for badges and selection |
 
-Semantic (same in both themes, tuned per theme for contrast):
+Semantic colours carry meaning only; every one has a `-subtle` tint for badges and highlighted
+rows.
 
 | Token | Light | Dark | Meaning |
 | --- | --- | --- | --- |
-| `--critical` | #b91c1c | #f87171 | severity critical, score < 40 |
-| `--high` | #c2410c | #fb923c | severity high, score 40–59 |
-| `--medium` | #a16207 | #facc15 | severity medium, score 60–79 |
-| `--low` | #1d4ed8 | #60a5fa | severity low |
-| `--info` | #52525b | #a1a1aa | informational |
-| `--good` | #15803d | #4ade80 | score ≥ 80, resolved |
+| `--critical` | #c22c2c | #f27d7d | severity critical, score < 50 |
+| `--high` | #c2560f | #f0a06a | severity high, score 50–64 |
+| `--medium` | #a8720b | #e2c15a | severity medium, score 65–79 |
+| `--low` | #4b6ea8 | #8fb0e6 | severity low |
+| `--info` | #6f6f7b | #9a9aa6 | informational |
+| `--good` | #1f7a45 | #6fcf8f | score ≥ 80, improved, resolved |
 
-Each semantic colour has a `-bg` variant at 10% alpha for badges.
+Score status words: ≥ 90 Excellent, ≥ 80 Good, ≥ 65 Fair, ≥ 50 Poor, below Critical.
 
-Chart palette (categorical, ordered): accent, `#0891b2`, `#7c3aed`, `#db2777`, `#65a30d`, `#ea580c`.
-Sequential (graph node density): neutral → `--medium` → `--critical`.
+Chart palette (categorical, ordered): `--chart-1` (accent) … `--chart-6`. Charts are used only
+where a shape carries information (health over time, commits per week); everything else is a
+number in a row with a thin proportional bar.
 
 ## Shape
 
-Radii: 4px controls, 6px cards/inputs, 8px dialogs, full for pills. Borders 1px. Shadows only on
-floating layers: `0 1px 2px rgb(0 0 0 / .06)` (popover), `0 8px 24px rgb(0 0 0 / .12)` (dialog).
-Dark theme uses borders instead of shadows to separate surfaces.
+Radii: 3px chips and kbd, 4px controls and inputs, 6px panels and popovers, 8px dialogs. Borders
+1px. Shadows only on floating layers (`--shadow-sm` inputs, `--shadow-md` menus, `--shadow-lg`
+sheets and dialogs); the dark theme replaces the ambient shadow with a 1px ring.
 
-## Components
+## Primitives (`apps/web/src/components/ui`)
 
-- **Button:** sizes sm(28px) md(32px) lg(36px); variants primary (accent), secondary (surface +
-  border), ghost, destructive. Icon-only buttons are square and require `aria-label`.
-- **Input / Select / Combobox:** 32px, border-strong, focus ring 2px accent at 40% alpha outside.
-- **Badge:** 20px, 11px uppercase for severity (`CRIT HIGH MED LOW INFO`); sentence case for others.
-- **Card:** surface, border, 6px radius, optional header row with title (13px/600) and action.
-- **Table:** sticky header on surface-2, 36px rows, zebra off, row hover surface-2, selected row
-  accent-bg at 8%. Monospace for paths and numbers.
-- **Score ring:** 96px SVG ring with grade letter; stroke colour from score band.
-- **Stat tile:** label (11px uppercase muted), value (20px/600 tabular), delta chip.
-- **Tabs:** underline style, 2px accent indicator, 36px tall.
-- **Dialog / Sheet:** 8px radius, 24px padding, title 16px/600, focus trapped.
-- **Command palette:** 560px wide, grouped results (Pages, Repositories, Findings), keyboard hints.
-- **Code block:** monospace 12px/18px, surface-2 background, line numbers muted, highlighted line
-  with `--medium-bg`.
-- **Skeleton:** surface-2 blocks with a slow 1.6s shimmer; shapes match final content.
-- **Toast:** bottom-right, 320px, title + description, auto-dismiss 5s, never for errors that need
-  action (those render inline).
-- **Charts (Recharts):** no 3D, no gradients; 1px grid lines at `--border`; tooltips on surface with
-  border; axis labels 11px muted; line charts 1.5px stroke; area fills at 12% alpha.
-- **Graph (xyflow):** nodes are 6px-radius rectangles with monospace label; edges 1px `--border-strong`,
-  cycle edges `--critical` dashed; selected node accent outline.
+- **Button** (`button.tsx`): sizes sm 28px, md 32px, lg 36px, icon variants; variants `primary`
+  (fg on inverse), `secondary` (bg + border-strong), `ghost`, `destructive`, `link`. `asChild`
+  for anchors; `loading` swaps the icon for a spinner.
+- **Badge** (`badge.tsx`): neutral, outline, accent and semantic tones; `SeverityDot` (6px),
+  `SeverityLabel` (dot + word), `SeverityBadge` (uppercase tinted pill, used once per detail view),
+  `StatusBadge`, `StepBadge`, `DemoBadge`.
+- **Panel** (`panel.tsx`): bordered container with `PanelHeader` (title, muted description, action)
+  and optional footer. Not a card: no shadow, no padding by default; contents are lists or tables.
+- **Metric** (`metric.tsx`): `MetricList` and `MetricRow` (label, hint, tabular value, tone)
+  replace stat tiles; `Figure` for one headline number; `Bar` for proportional bars.
+- **Score** (`score.tsx`): `HealthScore` (44px number, status word, delta, thin bar; announced as
+  "Health score: 82 of 100, Good"), `ScoreRow` (label, delta, score, bar), `ScoreText`, `Delta`,
+  `Sparkline`. There is no gauge or ring.
+- **Table** (`table.tsx`): `--bg-subtle` header, 12px uppercase column labels, numeric columns
+  right-aligned and tabular, interactive rows on hover.
+- **Inputs** (`input.tsx`): `Input`, `NativeSelect` (with chevron), `Checkbox` (row with count),
+  `SegmentedControl` (fieldset of `aria-pressed` buttons), `Kbd`.
+- **Code** (`code.tsx`): dependency-free tokenizer for TS/JS with `.tok-*` classes; `CodeBlock`
+  with line numbers and a highlighted line; `InlineCode`; `FilePath` (directory muted, file name
+  emphasised, optional `:line`).
+- **Feedback** (`feedback.tsx`): `Skeleton`, `SkeletonText`, `SkeletonRows` (shapes match the
+  final content), `EmptyState`, `ErrorState` (message, request id, retry), `InlineSpinner`.
+- **Page** (`page.tsx`): `PageHeader` (20px title, description, meta line, actions) and
+  `SplitLayout`.
+- **Overlay** (`overlay.tsx`): `Tooltip`, `Dialog`, `SheetContent` (right-hand detail panel, 640px,
+  48px header), dropdown menu, popover.
+- **Command palette** (`layout/command-palette.tsx`): pages, repository sections, repositories.
+
+## Application shell
+
+Top bar: logo, repository breadcrumb, primary navigation (Demo, Repositories), search trigger,
+theme toggle, account menu or "Connect GitHub". Sidebar: Overview, Findings (with count),
+Architecture, Dependencies, Testing, Complexity, Git history, Analyses, followed by the "Viewing"
+block (analysis selector, commit date, "Switch to latest", in-progress chip) and the analyze
+button for owners. The active item has a 2px `--fg` marker on the left edge and a muted background.
 
 ## Iconography
 
-`lucide-react`, 16px in controls, 14px inline with text, stroke 1.75. No coloured or filled icons
-outside status indicators.
+`lucide-react`, 16px in controls, 14px inline with text, stroke 1.75. No coloured icons outside
+status indicators. No brand icons from lucide; GitHub uses a local SVG.
 
 ## Motion
 
-120ms ease-out for hover/focus, 180ms for panel open/close, none for data updates (values swap
-without animating, so tables never jitter). Respect `prefers-reduced-motion`.
+120ms ease-out for hover and focus, 180ms for sheets and menus (`anim-fade`, `anim-rise`,
+`anim-slide`), none for data updates so tables never jitter. `prefers-reduced-motion` disables all
+animation and transitions.
 
 ## Voice
 
-Sentences, not slogans. Numbers with units. Errors say what happened and what to do next.
+Sentences, not slogans. Numbers with units. Errors say what happened and what to do next. Panel
+descriptions are lower-case fragments after the title ("most severe first", "newest first").

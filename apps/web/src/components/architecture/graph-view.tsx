@@ -25,18 +25,20 @@ import {
   forceY,
   type SimulationNodeDatum,
 } from "d3-force";
-import { ArrowLeft, Expand, Maximize2, Search } from "lucide-react";
+import { ArrowLeft, Maximize2, Minimize2, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRepo } from "@/components/repo/context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { FilePath } from "@/components/ui/code";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/feedback";
-import { Checkbox, Input } from "@/components/ui/input";
+import { Checkbox, Input, SegmentedControl } from "@/components/ui/input";
+import { MetricList, MetricRow } from "@/components/ui/metric";
+import { PageHeader } from "@/components/ui/page";
+import { Panel, PanelHeader } from "@/components/ui/panel";
 import { Table, TBody, Td, THead, Th, Tr } from "@/components/ui/table";
-import { SegmentedControl } from "@/components/ui/tabs";
 import { useArchitecture } from "@/lib/queries";
 import { useUrlParams } from "@/lib/use-url-params";
 import { cn, fmt, truncateMiddle } from "@/lib/utils";
@@ -50,30 +52,32 @@ interface NodeData extends Record<string, unknown> {
   maxLoc: number;
 }
 
+const NODE_H = 40;
+const widthOf = (m: ModuleNode, maxLoc: number) =>
+  132 + Math.round((m.loc / Math.max(1, maxLoc)) * 96);
+
 const ModuleNodeView = memo(function ModuleNodeView({ data, selected }: NodeProps<Node<NodeData>>) {
   const { module: m, dimmed, matched, maxLoc } = data;
   const density = m.loc > 0 ? m.findingCount / Math.max(1, m.loc / 100) : 0; // findings per 100 lines
   const heat =
     density >= 3
-      ? "border-critical"
+      ? "border-l-critical"
       : density >= 1
-        ? "border-high"
+        ? "border-l-high"
         : density > 0
-          ? "border-medium"
-          : "border-border-strong";
-  const width = 140 + Math.round((m.loc / Math.max(1, maxLoc)) * 100);
+          ? "border-l-medium"
+          : "border-l-border-strong";
   const label = m.kind === "dir" ? m.path : m.path.slice(m.path.lastIndexOf("/") + 1);
   return (
     <div
       className={cn(
-        "rounded-md border-2 bg-surface px-2.5 py-1.5 font-mono text-xs shadow-popover transition-opacity",
+        "rounded-sm border border-border border-l-[3px] bg-bg px-2.5 py-1.5 font-mono text-xs shadow-sm transition-opacity",
         heat,
-        selected && "outline outline-2 outline-accent",
-        matched && "outline outline-2 outline-accent/60",
-        dimmed && "opacity-25",
+        (selected || matched) && "border-fg ring-1 ring-fg",
+        dimmed && "opacity-40",
         m.inCycle && "border-dashed",
       )}
-      style={{ width }}
+      style={{ width: widthOf(m, maxLoc) }}
       title={m.path}
     >
       <Handle
@@ -82,12 +86,14 @@ const ModuleNodeView = memo(function ModuleNodeView({ data, selected }: NodeProp
         className="!size-1.5 !border-0 !bg-border-strong"
       />
       <div className="truncate text-fg">{label}</div>
-      <div className="mt-0.5 flex items-center gap-2 text-2xs text-fg-subtle">
+      <div className="mt-0.5 flex items-center gap-2 text-2xs text-fg-tertiary">
         <span className="tabular">{fmt(m.loc)} loc</span>
         <span className="tabular">
           ↓{m.fanIn} ↑{m.fanOut}
         </span>
-        {m.findingCount ? <span className="tabular text-fg-muted">{m.findingCount} f</span> : null}
+        {m.findingCount ? (
+          <span className="tabular text-fg-secondary">{m.findingCount} f</span>
+        ) : null}
       </div>
       <Handle
         type="source"
@@ -107,17 +113,16 @@ function layoutNodes(
   maxLoc: number,
 ): Map<string, { x: number; y: number }> {
   const pos = new Map<string, { x: number; y: number }>();
-  const widthOf = (m: ModuleNode) => 140 + Math.round((m.loc / Math.max(1, maxLoc)) * 100);
   if (layout === "hierarchical") {
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: "TB", nodesep: 24, ranksep: 56, marginx: 20, marginy: 20 });
+    g.setGraph({ rankdir: "TB", nodesep: 20, ranksep: 48, marginx: 16, marginy: 16 });
     g.setDefaultEdgeLabel(() => ({}));
-    for (const n of nodes) g.setNode(n.path, { width: widthOf(n), height: 44 });
+    for (const n of nodes) g.setNode(n.path, { width: widthOf(n, maxLoc), height: NODE_H });
     for (const e of edges) g.setEdge(e.from, e.to);
     dagre.layout(g);
     for (const n of nodes) {
       const p = g.node(n.path);
-      pos.set(n.path, { x: p.x - widthOf(n) / 2, y: p.y - 22 });
+      pos.set(n.path, { x: p.x - widthOf(n, maxLoc) / 2, y: p.y - NODE_H / 2 });
     }
     return pos;
   }
@@ -127,11 +132,12 @@ function layoutNodes(
     x: number;
     y: number;
   }
-  const sim: SimNode[] = nodes.map((n) => ({
+  // Deterministic initial placement (no Math.random) so layouts are reproducible.
+  const sim: SimNode[] = nodes.map((n, i) => ({
     id: n.path,
-    x: Math.random() * 800,
-    y: Math.random() * 600,
-    w: widthOf(n),
+    x: 400 + Math.cos(i * 2.399) * (40 + i * 6),
+    y: 300 + Math.sin(i * 2.399) * (40 + i * 6),
+    w: widthOf(n, maxLoc),
   }));
   const byId = new Map(sim.map((s) => [s.id, s]));
   const links = edges
@@ -142,19 +148,19 @@ function layoutNodes(
       "link",
       forceLink(links)
         .id((d) => (d as { id: string }).id)
-        .distance(120)
+        .distance(110)
         .strength(0.4),
     )
-    .force("charge", forceManyBody().strength(-380))
+    .force("charge", forceManyBody().strength(-360))
     .force(
       "collide",
-      forceCollide<SimNode>().radius((d) => d.w / 2 + 16),
+      forceCollide<SimNode>().radius((d) => d.w / 2 + 14),
     )
     .force("x", forceX(400).strength(0.03))
     .force("y", forceY(300).strength(0.03))
     .stop();
-  for (let i = 0; i < 250; i++) simulation.tick();
-  for (const s of sim) pos.set(s.id, { x: s.x - s.w / 2, y: s.y - 22 });
+  for (let i = 0; i < 260; i++) simulation.tick();
+  for (const s of sim) pos.set(s.id, { x: s.x - s.w / 2, y: s.y - NODE_H / 2 });
   return pos;
 }
 
@@ -211,30 +217,21 @@ function Graph({
     }));
     const edges: Edge[] = visibleEdges.map((e) => {
       const related = selected ? e.from === selected || e.to === selected : false;
+      const color = e.inCycle ? "var(--critical)" : related ? "var(--fg)" : "var(--border-strong)";
       return {
         id: `${e.from}->${e.to}`,
         source: e.from,
         target: e.to,
-        animated: false,
         style: {
-          stroke: e.inCycle
-            ? "var(--critical)"
-            : related
-              ? "var(--accent)"
-              : "var(--border-strong)",
-          strokeWidth: related ? 1.75 : Math.min(3, 0.75 + Math.log2(e.weight)),
-          strokeDasharray: e.inCycle ? "5 3" : undefined,
-          opacity: selected && !related ? 0.15 : 1,
+          stroke: color,
+          strokeWidth: related ? 1.5 : Math.min(2.5, 0.75 + Math.log2(e.weight) * 0.5),
+          strokeDasharray: e.inCycle ? "4 3" : undefined,
+          opacity: selected && !related ? 0.2 : 1,
         },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 12,
-          height: 12,
-          color: e.inCycle ? "var(--critical)" : related ? "var(--accent)" : "var(--border-strong)",
-        },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 10, height: 10, color },
         label: e.weight > 1 ? String(e.weight) : undefined,
-        labelStyle: { fontSize: 10, fill: "var(--fg-subtle)" },
-        labelBgStyle: { fill: "var(--bg)" },
+        labelStyle: { fontSize: 10, fill: "var(--fg-tertiary)" },
+        labelBgStyle: { fill: "var(--bg-subtle)" },
       };
     });
     return { nodes, edges };
@@ -242,7 +239,7 @@ function Graph({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refit when the graph shape changes
   useEffect(() => {
-    const t = setTimeout(() => flow.fitView({ padding: 0.15, duration: 200 }), 30);
+    const t = setTimeout(() => flow.fitView({ padding: 0.12, duration: 200 }), 30);
     return () => clearTimeout(t);
   }, [level, root, layout, cyclesOnly, data]);
 
@@ -264,17 +261,17 @@ function Graph({
       }}
       onPaneClick={() => onSelect(null)}
       proOptions={{ hideAttribution: false }}
-      className="rounded-md border border-border"
     >
-      <Background gap={24} size={1} color="var(--border)" />
-      <Controls showInteractive={false} />
+      <Background gap={20} size={1} color="var(--border)" />
+      <Controls showInteractive={false} position="bottom-left" />
       <MiniMap
         pannable
         zoomable
+        position="bottom-right"
         nodeColor={(n) =>
-          (n.data as NodeData).module.inCycle ? "var(--critical)" : "var(--fg-subtle)"
+          (n.data as NodeData).module.inCycle ? "var(--critical)" : "var(--fg-tertiary)"
         }
-        maskColor="rgb(0 0 0 / 0.08)"
+        maskColor="rgb(0 0 0 / 0.06)"
       />
     </ReactFlow>
   );
@@ -283,6 +280,7 @@ function Graph({
 export function ArchitectureView() {
   const repo = useRepo();
   const sp = useSearchParams();
+  const { update } = useUrlParams();
   const root = sp.get("root");
   const level: "dir" | "file" = root ? "file" : "dir";
   const arch = useArchitecture(repo.analysis?.id ?? null, level, root ?? undefined);
@@ -292,7 +290,6 @@ export function ArchitectureView() {
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
-  const { update } = useUrlParams();
   const setRoot = useCallback(
     (r: string | null) => {
       setSelected(null);
@@ -311,56 +308,71 @@ export function ArchitectureView() {
 
   if (!repo.analysis)
     return (
-      <EmptyState
-        title="No architecture graph yet"
-        description="The module graph is built during analysis."
-      />
+      <>
+        <PageHeader title="Architecture" />
+        <EmptyState
+          title="No architecture graph yet"
+          description="The module graph is built during analysis."
+        />
+      </>
     );
-  if (arch.isPending) return <Skeleton className="h-[560px]" />;
+  const a = repo.analysis;
+
+  if (arch.isPending)
+    return (
+      <>
+        <PageHeader title="Architecture" />
+        <Skeleton className="h-[560px]" />
+      </>
+    );
   if (arch.isError) return <ErrorState error={arch.error} onRetry={() => arch.refetch()} />;
   const data = arch.data;
   const selectedNode = selected ? (data.nodes.find((n) => n.path === selected) ?? null) : null;
-  const q = repo.preserveQuery ? `&${repo.preserveQuery}` : "";
-  const base = `/r/${repo.owner}/${repo.name}`;
-  const hubs = [...data.nodes].sort((a, b) => b.fanIn - a.fanIn).slice(0, 8);
+  const hubs = [...data.nodes].sort((x, y) => y.fanIn - x.fanIn).slice(0, 8);
 
   if (data.nodes.length === 0) {
     return (
-      <EmptyState
-        title="No modules to show"
-        description={
-          level === "file"
-            ? "This directory has no parsed source files."
-            : "No TypeScript or JavaScript modules were parsed for this commit."
-        }
-        action={
-          level === "file" ? (
-            <Button onClick={() => setRoot(null)}>Back to directories</Button>
-          ) : null
-        }
-      />
+      <>
+        <PageHeader title="Architecture" />
+        <EmptyState
+          title="No modules to show"
+          description={
+            level === "file"
+              ? "This directory has no parsed source files."
+              : "No TypeScript or JavaScript modules were parsed for this commit."
+          }
+          action={
+            level === "file" ? (
+              <Button onClick={() => setRoot(null)}>Back to directories</Button>
+            ) : null
+          }
+        />
+      </>
     );
   }
 
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-bg px-3 py-2">
       {level === "file" ? (
         <Button size="sm" variant="ghost" onClick={() => setRoot(null)}>
           <ArrowLeft /> Directories
         </Button>
       ) : null}
-      <span className="font-mono text-xs text-fg-muted">
+      <span className="font-mono text-xs text-fg-secondary">
         {level === "file" ? root : "directory level"}
+      </span>
+      <span className="text-border-strong" aria-hidden>
+        |
       </span>
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-2 top-2 size-3.5 text-fg-subtle"
+          className="pointer-events-none absolute left-2 top-[7px] size-3.5 text-fg-tertiary"
           aria-hidden
         />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Find module…"
+          placeholder="Find module"
           className="h-7 w-44 pl-7 text-xs"
           aria-label="Find module"
         />
@@ -373,15 +385,16 @@ export function ArchitectureView() {
           { value: "hierarchical", label: "Layered" },
           { value: "force", label: "Force" },
         ]}
+        className="h-7"
       />
       <Checkbox
         checked={cyclesOnly}
         onCheckedChange={setCyclesOnly}
         label="Cycles only"
-        className="h-7 border border-border-strong rounded-md"
+        className="mx-0 h-7 rounded-sm border border-border-strong px-2"
       />
-      <span className="ml-auto flex items-center gap-2 text-xs text-fg-subtle">
-        {data.truncated ? <Badge tone="medium">Largest {data.nodes.length} shown</Badge> : null}
+      <span className="ml-auto flex items-center gap-2 text-xs text-fg-tertiary">
+        {data.truncated ? <Badge tone="medium">largest {data.nodes.length} shown</Badge> : null}
         <span className="tabular">
           {data.nodes.length} nodes · {data.edges.length} edges
         </span>
@@ -391,24 +404,115 @@ export function ArchitectureView() {
           onClick={() => setFullscreen((f) => !f)}
           aria-label={fullscreen ? "Exit full screen" : "Full screen"}
         >
-          {fullscreen ? <Expand /> : <Maximize2 />}
+          {fullscreen ? <Minimize2 /> : <Maximize2 />}
         </Button>
       </span>
     </div>
   );
 
+  const detail = selectedNode ? (
+    <aside
+      className="flex w-full flex-col border-t border-border bg-bg lg:w-[300px] lg:border-l lg:border-t-0"
+      aria-label="Selected module"
+    >
+      <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <div className="eyebrow">{selectedNode.kind === "dir" ? "Directory" : "File"}</div>
+          <FilePath
+            path={selectedNode.path}
+            className="mt-1 block whitespace-normal break-all text-sm"
+          />
+        </div>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={() => setSelected(null)}
+          aria-label="Close details"
+        >
+          <X />
+        </Button>
+      </div>
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-2">
+        <MetricList>
+          <MetricRow label="Lines" value={fmt(selectedNode.loc)} />
+          {selectedNode.kind === "dir" ? (
+            <MetricRow label="Files" value={fmt(selectedNode.fileCount)} />
+          ) : null}
+          <MetricRow
+            label="Findings"
+            value={fmt(selectedNode.findingCount)}
+            tone={selectedNode.findingCount ? "warn" : undefined}
+          />
+          <MetricRow label="Fan-in" hint="imported by" value={fmt(selectedNode.fanIn)} />
+          <MetricRow label="Fan-out" hint="imports" value={fmt(selectedNode.fanOut)} />
+          <MetricRow
+            label="Instability"
+            hint="out / (in + out)"
+            value={selectedNode.instability === null ? "–" : selectedNode.instability.toFixed(2)}
+          />
+          <MetricRow
+            label="In a cycle"
+            value={selectedNode.inCycle ? "yes" : "no"}
+            tone={selectedNode.inCycle ? "bad" : undefined}
+          />
+        </MetricList>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {selectedNode.kind === "dir" ? (
+            <Button size="sm" variant="primary" onClick={() => setRoot(selectedNode.path)}>
+              Open files
+            </Button>
+          ) : null}
+          <Button asChild size="sm" variant="secondary">
+            <Link href={repo.href("findings", `path=${encodeURIComponent(selectedNode.path)}`)}>
+              Findings here
+            </Link>
+          </Button>
+        </div>
+        <EdgeList
+          title="Imports"
+          items={data.edges.filter((e) => e.from === selectedNode.path).map((e) => e.to)}
+          onSelect={setSelected}
+        />
+        <EdgeList
+          title="Imported by"
+          items={data.edges.filter((e) => e.to === selectedNode.path).map((e) => e.from)}
+          onSelect={setSelected}
+        />
+      </div>
+    </aside>
+  ) : null;
+
   return (
-    <div className="space-y-4">
-      <div className={cn(fullscreen && "fixed inset-0 z-50 flex flex-col gap-3 bg-bg p-4")}>
+    <>
+      {!fullscreen ? (
+        <PageHeader
+          title="Architecture"
+          description="Internal import graph. Node width follows size; the left edge colours by finding density; dashed nodes and red edges are part of a cycle. Double-click a directory to open its files."
+          meta={
+            <>
+              <span className="font-mono">{a.commitSha?.slice(0, 7)}</span>
+              <span>
+                {fmt(data.nodes.length)} {level === "dir" ? "directories" : "files"}
+              </span>
+              <span>{fmt(data.cycles.length)} cycles</span>
+            </>
+          }
+        />
+      ) : null}
+      <div
+        className={cn(
+          "overflow-hidden rounded-md border border-border",
+          fullscreen && "fixed inset-0 z-50 rounded-none border-0",
+        )}
+      >
         {toolbar}
         <div
           className={cn(
-            "mt-3 grid gap-4",
-            fullscreen ? "min-h-0 flex-1" : "",
-            selectedNode ? "lg:grid-cols-[1fr_300px]" : "",
+            "flex flex-col lg:flex-row",
+            fullscreen ? "h-[calc(100vh-49px)]" : "h-[560px]",
           )}
         >
-          <div className={cn(fullscreen ? "h-full min-h-0" : "h-[560px]")}>
+          <div className="min-h-0 min-w-0 flex-1">
             <ReactFlowProvider>
               <Graph
                 data={data}
@@ -423,112 +527,28 @@ export function ArchitectureView() {
               />
             </ReactFlowProvider>
           </div>
-          {selectedNode ? (
-            <Card className="scrollbar-thin overflow-y-auto">
-              <CardHeader
-                title={<span className="break-all font-mono text-xs">{selectedNode.path}</span>}
-                description={
-                  selectedNode.kind === "dir" ? `${fmt(selectedNode.fileCount)} files` : "file"
-                }
-              />
-              <CardBody className="space-y-3 text-sm">
-                <dl className="grid grid-cols-2 gap-2">
-                  <Metric label="Lines" value={fmt(selectedNode.loc)} />
-                  <Metric label="Findings" value={fmt(selectedNode.findingCount)} />
-                  <Metric
-                    label="Fan-in"
-                    value={fmt(selectedNode.fanIn)}
-                    hint="modules importing it"
-                  />
-                  <Metric
-                    label="Fan-out"
-                    value={fmt(selectedNode.fanOut)}
-                    hint="modules it imports"
-                  />
-                  <Metric
-                    label="Instability"
-                    value={
-                      selectedNode.instability === null ? "–" : selectedNode.instability.toFixed(2)
-                    }
-                    hint="out / (in + out)"
-                  />
-                  <Metric label="In cycle" value={selectedNode.inCycle ? "yes" : "no"} />
-                </dl>
-                <div className="flex flex-wrap gap-2">
-                  {selectedNode.kind === "dir" ? (
-                    <Button size="sm" onClick={() => setRoot(selectedNode.path)}>
-                      Open files
-                    </Button>
-                  ) : null}
-                  <Button asChild size="sm" variant="ghost">
-                    <Link
-                      href={`${base}/findings?path=${encodeURIComponent(selectedNode.path)}${q}`}
-                    >
-                      Findings here
-                    </Link>
-                  </Button>
-                </div>
-                <div>
-                  <p className="label-caps mb-1">Imports</p>
-                  <ul className="max-h-40 space-y-0.5 overflow-y-auto font-mono text-xs text-fg-muted">
-                    {data.edges
-                      .filter((e) => e.from === selectedNode.path)
-                      .map((e) => (
-                        <li key={e.to}>
-                          <button
-                            type="button"
-                            className="truncate hover:text-fg"
-                            onClick={() => setSelected(e.to)}
-                          >
-                            {e.to}
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="label-caps mb-1">Imported by</p>
-                  <ul className="max-h-40 space-y-0.5 overflow-y-auto font-mono text-xs text-fg-muted">
-                    {data.edges
-                      .filter((e) => e.to === selectedNode.path)
-                      .map((e) => (
-                        <li key={e.from}>
-                          <button
-                            type="button"
-                            className="truncate hover:text-fg"
-                            onClick={() => setSelected(e.from)}
-                          >
-                            {e.from}
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              </CardBody>
-            </Card>
-          ) : null}
+          {detail}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Dependency cycles"
-            description={
-              data.cycles.length
-                ? `${data.cycles.length} strongly connected groups`
-                : "No cycles at this level"
-            }
-          />
-          {data.cycles.length ? (
-            <ul className="divide-y divide-border">
-              {data.cycles.slice(0, 12).map((c) => (
-                <li key={c.paths.join("|")} className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <Badge tone={c.length >= 3 ? "critical" : "high"}>{c.length} files</Badge>
+      {!fullscreen ? (
+        <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader
+              title="Dependency cycles"
+              description={
+                data.cycles.length
+                  ? `${data.cycles.length} strongly connected groups`
+                  : "none at this level"
+              }
+            />
+            {data.cycles.length ? (
+              <ul className="hairlines">
+                {data.cycles.slice(0, 12).map((c) => (
+                  <li key={c.paths.join("|")} className="px-4 py-2">
                     <button
                       type="button"
-                      className="truncate font-mono text-xs text-fg hover:underline"
+                      className="flex w-full items-center gap-3 text-left"
                       onClick={() => {
                         const p = c.paths[0];
                         if (!p) return;
@@ -536,60 +556,90 @@ export function ArchitectureView() {
                         setSelected(p);
                       }}
                     >
-                      {c.paths
-                        .slice(0, 3)
-                        .map((p) => truncateMiddle(p, 36))
-                        .join(" → ")}
-                      {c.length > 3 ? " → …" : ""}
+                      <Badge tone={c.length >= 3 ? "critical" : "high"}>{c.length} files</Badge>
+                      <span className="truncate font-mono text-xs text-fg hover:underline">
+                        {c.paths
+                          .slice(0, 3)
+                          .map((p) => truncateMiddle(p, 34))
+                          .join(" → ")}
+                        {c.length > 3 ? " → …" : ""}
+                      </span>
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <CardBody>
-              <p className="text-sm text-fg-muted">
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-4 py-8 text-center text-sm text-fg-secondary">
                 Modules at this level form a directed acyclic graph.
               </p>
-            </CardBody>
-          )}
-        </Card>
-        <Card>
-          <CardHeader title="Most depended upon" description="Highest fan-in at this level" />
-          <Table>
-            <THead>
-              <tr>
-                <Th>Module</Th>
-                <Th numeric>Fan-in</Th>
-                <Th numeric>Fan-out</Th>
-                <Th numeric>Lines</Th>
-              </tr>
-            </THead>
-            <TBody>
-              {hubs.map((h) => (
-                <Tr key={h.path} interactive onClick={() => setSelected(h.path)}>
-                  <Td mono className="max-w-[300px] truncate" title={h.path}>
-                    {truncateMiddle(h.path, 44)}
-                  </Td>
-                  <Td numeric>{h.fanIn}</Td>
-                  <Td numeric>{h.fanOut}</Td>
-                  <Td numeric>{fmt(h.loc)}</Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        </Card>
-      </div>
-    </div>
+            )}
+          </Panel>
+          <Panel>
+            <PanelHeader title="Most depended upon" description="highest fan-in at this level" />
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Module</Th>
+                  <Th numeric>Fan-in</Th>
+                  <Th numeric>Fan-out</Th>
+                  <Th numeric>Lines</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {hubs.map((h) => (
+                  <Tr key={h.path} interactive onClick={() => setSelected(h.path)}>
+                    <Td className="max-w-[300px]">
+                      <FilePath path={h.path} />
+                    </Td>
+                    <Td numeric>{h.fanIn}</Td>
+                    <Td numeric className="text-fg-secondary">
+                      {h.fanOut}
+                    </Td>
+                    <Td numeric className="text-fg-secondary">
+                      {fmt(h.loc)}
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </Panel>
+        </section>
+      ) : null}
+    </>
   );
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function EdgeList({
+  title,
+  items,
+  onSelect,
+}: {
+  title: string;
+  items: string[];
+  onSelect: (path: string) => void;
+}) {
   return (
-    <div>
-      <dt className="text-2xs uppercase tracking-[0.04em] text-fg-subtle">{label}</dt>
-      <dd className="tabular font-medium">{value}</dd>
-      {hint ? <dd className="text-2xs text-fg-subtle">{hint}</dd> : null}
+    <div className="mt-4">
+      <div className="eyebrow mb-1">
+        {title} <span className="tabular normal-case tracking-normal">({items.length})</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-fg-tertiary">None</p>
+      ) : (
+        <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+          {items.map((p) => (
+            <li key={p}>
+              <button
+                type="button"
+                className="block w-full truncate text-left font-mono text-xs text-fg-secondary hover:text-fg"
+                onClick={() => onSelect(p)}
+              >
+                {p}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,22 +1,22 @@
 import type { AnalysisStatus, Severity, StepStatus } from "@repolens/shared";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
-import { cn, SEVERITY_FULL, SEVERITY_LABEL } from "@/lib/utils";
+import { cn, SEVERITY_FULL } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-2xs font-medium leading-4 whitespace-nowrap",
+  "inline-flex h-5 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xs border px-1.5 text-2xs font-medium leading-4",
   {
     variants: {
       tone: {
-        neutral: "border-border bg-surface-2 text-fg-muted",
-        accent: "border-transparent bg-accent-bg text-accent",
-        critical: "border-transparent bg-critical-bg text-critical",
-        high: "border-transparent bg-high-bg text-high",
-        medium: "border-transparent bg-medium-bg text-medium",
-        low: "border-transparent bg-low-bg text-low",
-        info: "border-transparent bg-info-bg text-info",
-        good: "border-transparent bg-good-bg text-good",
-        outline: "border-border-strong bg-transparent text-fg-muted",
+        neutral: "border-border bg-bg-muted text-fg-secondary",
+        outline: "border-border-strong bg-transparent text-fg-secondary",
+        accent: "border-transparent bg-accent-subtle text-accent",
+        critical: "border-transparent bg-critical-subtle text-critical",
+        high: "border-transparent bg-high-subtle text-high",
+        medium: "border-transparent bg-medium-subtle text-medium",
+        low: "border-transparent bg-low-subtle text-low",
+        info: "border-transparent bg-info-subtle text-info",
+        good: "border-transparent bg-good-subtle text-good",
       },
     },
     defaultVariants: { tone: "neutral" },
@@ -31,32 +31,68 @@ export function Badge({ className, tone, ...props }: BadgeProps) {
   return <span className={cn(badgeVariants({ tone }), className)} {...props} />;
 }
 
-export function SeverityBadge({
+const SEVERITY_DOT: Record<Severity, string> = {
+  critical: "bg-critical",
+  high: "bg-high",
+  medium: "bg-medium",
+  low: "bg-low",
+  info: "bg-info",
+};
+
+/** A small filled dot; the quietest way to encode severity next to text. */
+export function SeverityDot({ severity, className }: { severity: Severity; className?: string }) {
+  return (
+    <span
+      className={cn("inline-block size-2 shrink-0 rounded-full", SEVERITY_DOT[severity], className)}
+      aria-hidden
+    />
+  );
+}
+
+/** Dot + word. Use in dense lists where a tinted pill would be visual noise. */
+export function SeverityLabel({
   severity,
-  full = false,
   className,
+  short,
 }: {
   severity: Severity;
-  full?: boolean;
   className?: string;
+  short?: boolean;
 }) {
+  const label = SEVERITY_FULL[severity];
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs font-medium text-fg-secondary",
+        className,
+      )}
+      title={`Severity: ${label}`}
+    >
+      <SeverityDot severity={severity} />
+      <span className={short ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
+    </span>
+  );
+}
+
+/** Tinted pill; use once per view where severity is the headline (detail panels). */
+export function SeverityBadge({ severity, className }: { severity: Severity; className?: string }) {
   return (
     <Badge
       tone={severity}
-      className={cn("uppercase tracking-[0.04em]", className)}
+      className={cn("uppercase tracking-[0.06em]", className)}
       aria-label={`Severity ${SEVERITY_FULL[severity]}`}
     >
-      {full ? SEVERITY_FULL[severity] : SEVERITY_LABEL[severity]}
+      {SEVERITY_FULL[severity]}
     </Badge>
   );
 }
 
 const STATUS_TONE: Record<AnalysisStatus, BadgeProps["tone"]> = {
-  queued: "neutral",
+  queued: "outline",
   running: "accent",
   completed: "good",
   failed: "critical",
-  cancelled: "outline",
+  cancelled: "neutral",
 };
 
 export function StatusBadge({ status, className }: { status: AnalysisStatus; className?: string }) {
@@ -89,11 +125,11 @@ export function StepBadge({ status }: { status: StepStatus }) {
 export function DemoBadge({ className }: { className?: string }) {
   return (
     <Badge
-      tone="accent"
-      className={cn("uppercase tracking-[0.04em]", className)}
-      title="This repository was analyzed by the real pipeline and is shown as a public demo"
+      tone="outline"
+      className={cn("uppercase tracking-[0.06em]", className)}
+      title="Public demo: a real repository analyzed by the real pipeline. Read-only."
     >
-      Demo data
+      Demo
     </Badge>
   );
 }

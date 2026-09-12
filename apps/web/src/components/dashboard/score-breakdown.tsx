@@ -17,81 +17,92 @@ function formatValue(v: string | number | boolean | null): string {
   return v;
 }
 
-export function ScoreBreakdown({ scoring }: { scoring: Scoring | null }) {
+export function ScoreBreakdown({
+  scoring,
+  trigger,
+}: {
+  scoring: Scoring | null;
+  trigger?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost">
-          <HelpCircle /> How is this computed?
-        </Button>
+        {trigger ?? (
+          <Button size="sm" variant="ghost">
+            <HelpCircle /> How is this computed?
+          </Button>
+        )}
       </DialogTrigger>
       <SheetContent
         title="Score derivation"
-        description={`Scoring model v${scoring?.version ?? "?"} · every input is computed from the repository at the analyzed commit`}
+        description={`model v${scoring?.version ?? "?"}`}
+        width="max-w-[600px]"
       >
         {!scoring ? (
-          <p className="p-5 text-sm text-fg-muted">This analysis has no scoring document.</p>
+          <p className="p-5 text-sm text-fg-secondary">This analysis has no scoring document.</p>
         ) : (
-          <div className="space-y-6 p-5">
-            <section className="rounded-md border border-border bg-surface-2 p-3 text-sm">
-              <p>
-                <span className="font-semibold">Health score {scoring.healthScore}</span> = weighted
-                mean of the seven category scores. Each category starts from a base score built from
-                its metric inputs (points earned over points available), then loses up to 20 points
-                for findings whose signal is not already an input below (hotspots, hub modules,
-                FIXMEs, parameter counts, non-null density, mixed lockfiles, missing tests),
-                weighted by severity and divided by codebase size.
-              </p>
-            </section>
-            {scoring.categories.map((c) => (
-              <section key={c.category}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold">{CATEGORY_LABELS[c.category]}</h3>
-                    <p className="text-xs text-fg-muted">{CATEGORY_DESCRIPTION[c.category]}</p>
+          <div className="p-5">
+            <p className="text-sm leading-6 text-fg-secondary">
+              <span className="font-semibold text-fg">Health score {scoring.healthScore}</span> is
+              the weighted mean of seven category scores. Each category earns points from measured
+              inputs (points earned over points available), then loses up to 20 points for findings
+              whose signal is not already one of those inputs, weighted by severity and divided by
+              codebase size. Every input below is computed from the repository at the analyzed
+              commit.
+            </p>
+            <div className="mt-6 space-y-7">
+              {scoring.categories.map((c) => (
+                <section key={c.category}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-fg">
+                        {CATEGORY_LABELS[c.category]}
+                      </h3>
+                      <p className="text-xs text-fg-tertiary">{CATEGORY_DESCRIPTION[c.category]}</p>
+                    </div>
+                    <div className="text-right">
+                      <ScoreText score={c.score} className="text-lg" />
+                      <div className="text-2xs text-fg-tertiary">weight {c.weight}</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <ScoreText score={c.score} className="text-lg" />
-                    <div className="text-2xs text-fg-subtle">weight {c.weight}</div>
+                  <ScoreBar score={c.score} className="mt-2" />
+                  <p className="tabular mt-1.5 text-xs text-fg-tertiary">
+                    base {c.base} − penalty {c.findingPenalty} ={" "}
+                    <span className="font-medium text-fg-secondary">{c.score}</span>
+                  </p>
+                  <div className="mt-2 overflow-hidden rounded-md border border-border">
+                    <Table>
+                      <THead>
+                        <tr>
+                          <Th>Input</Th>
+                          <Th numeric>Value</Th>
+                          <Th numeric>Points</Th>
+                        </tr>
+                      </THead>
+                      <TBody>
+                        {c.inputs.map((i) => (
+                          <Tr key={i.label}>
+                            <Td className="h-8 text-xs">
+                              {i.label}
+                              {i.note ? (
+                                <span className="block text-2xs text-fg-tertiary">{i.note}</span>
+                              ) : null}
+                            </Td>
+                            <Td numeric mono className="h-8">
+                              {formatValue(i.value)}
+                            </Td>
+                            <Td numeric mono className="h-8 text-fg-secondary">
+                              {i.points}/{i.max}
+                            </Td>
+                          </Tr>
+                        ))}
+                      </TBody>
+                    </Table>
                   </div>
-                </div>
-                <ScoreBar score={c.score} className="mt-2" />
-                <p className="mt-2 text-xs text-fg-muted">
-                  Base {c.base} − findings penalty {c.findingPenalty} ={" "}
-                  <span className="tabular font-medium text-fg">{c.score}</span>
-                </p>
-                <div className="mt-2 rounded-md border border-border">
-                  <Table>
-                    <THead>
-                      <tr>
-                        <Th>Input</Th>
-                        <Th numeric>Value</Th>
-                        <Th numeric>Points</Th>
-                      </tr>
-                    </THead>
-                    <TBody>
-                      {c.inputs.map((i) => (
-                        <Tr key={i.label}>
-                          <Td className="text-xs">
-                            {i.label}
-                            {i.note ? (
-                              <span className="block text-2xs text-fg-subtle">{i.note}</span>
-                            ) : null}
-                          </Td>
-                          <Td numeric mono>
-                            {formatValue(i.value)}
-                          </Td>
-                          <Td numeric mono>
-                            {i.points}/{i.max}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </TBody>
-                  </Table>
-                </div>
-              </section>
-            ))}
+                </section>
+              ))}
+            </div>
           </div>
         )}
       </SheetContent>
