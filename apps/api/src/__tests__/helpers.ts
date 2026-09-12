@@ -106,7 +106,8 @@ export function ghRepo(
   };
 }
 
-export async function createHarness(): Promise<TestHarness> {
+/** `env` overrides the API configuration, for suites that need a different limit or quota. */
+export async function createHarness(env: NodeJS.ProcessEnv = {}): Promise<TestHarness> {
   const database = createDatabase(TEST_DATABASE_URL, { max: 3 });
   const config = loadConfig({
     DATABASE_URL: TEST_DATABASE_URL,
@@ -117,6 +118,7 @@ export async function createHarness(): Promise<TestHarness> {
     GITHUB_CLIENT_SECRET: "secret",
     WEB_ORIGIN: "http://localhost:3000",
     API_ORIGIN: "http://localhost:4000",
+    ...env,
   });
   const enqueued: AnalysisJobPayload[] = [];
   const github = new FakeGitHub();

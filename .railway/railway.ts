@@ -60,6 +60,12 @@ export default defineRailway(() => {
       // X-Forwarded-For. The rate limiter keys on req.ip and would otherwise see one proxy IP.
       TRUST_PROXY: "true",
       SESSION_COOKIE_NAME: "repolens_session",
+      // Per-user analysis quotas. @fastify/rate-limit already bounds requests per minute; these
+      // bound the expensive thing behind a request — a clone plus a full AST pass — which one
+      // account could otherwise queue as fast as the worker drains it. Raise once real usage
+      // is visible. The demo repository is never affected.
+      MAX_CONCURRENT_ANALYSES: "2",
+      MAX_ANALYSES_PER_DAY: "25",
       DATABASE_URL: db.env.DATABASE_URL,
       // Set once with `railway variables`; see the runbook. Sign-in stays disabled until the
       // GitHub pair is present, which is deliberate: the demo works without it.

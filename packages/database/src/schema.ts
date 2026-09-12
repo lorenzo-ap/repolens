@@ -119,6 +119,8 @@ export const analyses = pgTable(
   (t) => [
     index("analyses_repository_created_idx").on(t.repositoryId, t.createdAt),
     index("analyses_repository_status_idx").on(t.repositoryId, t.status),
+    // Serves the per-user quota check the API runs before queueing an analysis.
+    index("analyses_requested_by_created_idx").on(t.requestedByUserId, t.createdAt),
   ],
 );
 

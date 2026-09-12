@@ -16,6 +16,10 @@ const ConfigSchema = z.object({
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   /** Optional. Error reporting stays off entirely while this is unset. */
   SENTRY_DSN: z.string().url().optional(),
+  /** Per-user cap on analyses queued or running at the same time. */
+  MAX_CONCURRENT_ANALYSES: z.coerce.number().int().min(1).max(100).default(2),
+  /** Per-user cap on analyses started in any rolling 24 hours. */
+  MAX_ANALYSES_PER_DAY: z.coerce.number().int().min(1).max(10_000).default(25),
 });
 
 export type ApiConfig = ReturnType<typeof loadConfig>;
@@ -43,6 +47,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     nodeEnv: c.NODE_ENV,
     trustProxy: c.TRUST_PROXY === "true",
     sentryDsn: c.SENTRY_DSN ?? null,
+    quotas: {
+      concurrentAnalyses: c.MAX_CONCURRENT_ANALYSES,
+      analysesPerDay: c.MAX_ANALYSES_PER_DAY,
+    },
     isProduction: c.NODE_ENV === "production",
   };
 }
