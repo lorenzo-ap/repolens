@@ -183,6 +183,13 @@ Each step is safe to stop at; the app is usable, in demo-only mode, from step 6.
    API URL from step 4 for Production and Preview, then deploy. Verify the landing page and that
    **Explore demo** reaches a scored repository.
 
+   > **The API must be serving before this build runs.** The landing page prerenders its demo
+   > panel by fetching `API_INTERNAL_URL` during `next build`, and the fetch failure is swallowed,
+   > so an unreachable API silently ships a landing page with no demo panel. It self-heals on the
+   > next revalidation (120s), but the first visitors see the degraded page. This is why the API
+   > is deployed in step 4 and seeded in step 5, and why CI starts the API before building the
+   > web app.
+
 7. **Enable sign-in.** Create the OAuth app with the now-known Vercel domain, then:
    ```bash
    railway variables --service api --set GITHUB_CLIENT_ID=... --set GITHUB_CLIENT_SECRET=...

@@ -84,12 +84,19 @@ jobs:
         working-directory: apps/web
       - run: pnpm db:migrate
       - run: pnpm seed:demo
-      - run: pnpm --filter @repolens/api --filter @repolens/web build
-      - name: Start services
+      - run: pnpm --filter @repolens/api build
+      - name: Start the API
         run: |
           (cd apps/api && nohup node dist/main.js > /tmp/api.log 2>&1 &)
-          (cd apps/web && nohup pnpm start > /tmp/web.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:4000/api/v1/health && break; sleep 1; done
+      # The landing page prerenders its demo panel by fetching API_INTERNAL_URL during the build,
+      # so the API has to be serving before the web app is built or the panel is baked away for
+      # the first `revalidate` window. Production has the same ordering: the API is deployed
+      # before Vercel builds the web app.
+      - run: pnpm --filter @repolens/web build
+      - name: Start the web app
+        run: |
+          (cd apps/web && nohup pnpm start > /tmp/web.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:3000/ > /dev/null && break; sleep 1; done
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
