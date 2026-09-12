@@ -285,17 +285,15 @@ export async function seedCompletedAnalysis(
     })
     .returning();
   if (!analysis) throw new Error("seed analysis failed");
-  await h.ctx.db
-    .insert(analysisSteps)
-    .values(
-      STEP_KEYS.map((key, position) => ({
-        analysisId: analysis.id,
-        key,
-        label: STEP_LABELS[key],
-        position,
-        status: "completed" as const,
-      })),
-    );
+  await h.ctx.db.insert(analysisSteps).values(
+    STEP_KEYS.map((key, position) => ({
+      analysisId: analysis.id,
+      key,
+      label: STEP_LABELS[key],
+      position,
+      status: "completed" as const,
+    })),
+  );
   if (list.length) {
     await h.ctx.db.insert(findings).values(
       list.map((f) => ({
