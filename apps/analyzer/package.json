@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "start": "node dist/main.js",
-    "build": "esbuild src/main.ts src/seed-demo.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --packages=external --sourcemap",
+    "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "seed:demo": "tsx --env-file-if-exists=../../.env src/seed-demo.ts"
@@ -15,9 +15,14 @@
     "@repolens/analysis": "workspace:*",
     "@repolens/database": "workspace:*",
     "@repolens/shared": "workspace:*",
+    "@yarnpkg/lockfile": "1.1.0",
     "drizzle-orm": "0.45.2",
     "pg-boss": "12.31.0",
     "pino": "10.3.1",
+    "postgres": "3.4.9",
+    "semver": "7.8.5",
+    "ts-morph": "28.0.0",
+    "yaml": "2.9.1",
     "zod": "4.6.2"
   },
   "devDependencies": {
