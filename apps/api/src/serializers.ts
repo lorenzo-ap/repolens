@@ -32,7 +32,7 @@ export function serializeRepository(row: RepositoryRow, viewerUserId: string | n
   };
 }
 
-export function serializeAnalysis(row: AnalysisRow): AnalysisSummary {
+export function serializeAnalysis(row: Omit<AnalysisRow, "metrics">): AnalysisSummary {
   return {
     id: row.id,
     repositoryId: row.repositoryId,

@@ -4,6 +4,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { AppContext } from "../context";
 import { NotFoundError } from "../lib/errors";
 import { serializeAnalysis, serializeFinding, serializeRepository } from "../serializers";
+import { analysisSummaryColumns } from "./repositories";
 
 export async function demoOverview(ctx: AppContext): Promise<DemoResponse> {
   const [repo] = await ctx.db
@@ -14,7 +15,7 @@ export async function demoOverview(ctx: AppContext): Promise<DemoResponse> {
     .limit(1);
   if (!repo) throw new NotFoundError("Demo repository");
   const [latest] = await ctx.db
-    .select()
+    .select(analysisSummaryColumns)
     .from(analyses)
     .where(and(eq(analyses.repositoryId, repo.id), eq(analyses.status, "completed")))
     .orderBy(desc(analyses.createdAt))

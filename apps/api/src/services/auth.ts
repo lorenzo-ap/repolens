@@ -1,5 +1,5 @@
 import { generateSessionToken, hashSessionToken, sessions, users } from "@repolens/database";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, lt, sql } from "drizzle-orm";
 import { SESSION_TTL_MS } from "../config";
 import type { AppContext, Viewer } from "../context";
 import { UnauthorizedError } from "../lib/errors";
@@ -85,6 +85,16 @@ export async function logout(ctx: AppContext, sessionId: string): Promise<void> 
 export async function deleteAccount(ctx: AppContext, userId: string): Promise<void> {
   await ctx.db.delete(users).where(eq(users.id, userId));
   ctx.logger.info({ userId }, "account deleted");
+}
+
+/** Removes expired sessions; called on startup and periodically. */
+export async function purgeExpiredSessions(ctx: AppContext): Promise<number> {
+  const deleted = await ctx.db
+    .delete(sessions)
+    .where(lt(sessions.expiresAt, new Date()))
+    .returning({ id: sessions.id });
+  if (deleted.length) ctx.logger.info({ count: deleted.length }, "expired sessions purged");
+  return deleted.length;
 }
 
 export function requireViewer(viewer: Viewer | null): Viewer {
