@@ -14,9 +14,13 @@ import { loadConfig } from "./config";
 import { runAnalysis } from "./run-analysis";
 
 const config = loadConfig();
+// pino-pretty is a devDependency, so it is absent from the pruned production image the seed is
+// actually run from. Same condition as the worker.
 const logger = pino({
   level: config.logLevel,
-  transport: { target: "pino-pretty", options: { colorize: true } },
+  ...(config.nodeEnv === "development"
+    ? { transport: { target: "pino-pretty", options: { colorize: true } } }
+    : {}),
 });
 
 const owner = process.env.DEMO_REPO_OWNER ?? "vercel";

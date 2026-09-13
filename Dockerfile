@@ -25,12 +25,19 @@ COPY . .
 ARG API_INTERNAL_URL=http://api:4000
 ENV API_INTERNAL_URL=$API_INTERNAL_URL
 RUN pnpm --filter @repolens/api build && pnpm --filter @repolens/analyzer build && pnpm --filter @repolens/web build
+# Prune each service to its own production dependencies. The esbuild bundles already inline the
+# workspace packages and everything that is not a declared runtime dependency, so the whole
+# workspace store is dead weight: copying it produced a 1.1 GB image, and on a scale-to-zero host
+# that meant a three and a half minute cold start before any work began.
+# --legacy: pnpm 10 otherwise requires inject-workspace-packages, which this workspace does not
+# use. The workspace packages are inlined by esbuild anyway, so nothing is injected regardless.
+RUN pnpm --filter=@repolens/api deploy --prod --legacy /prune/api \
+ && pnpm --filter=@repolens/analyzer deploy --prod --legacy /prune/analyzer
 
 # --- API -------------------------------------------------------------------
 FROM base AS api
 ENV NODE_ENV=production
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /prune/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 USER node
@@ -42,8 +49,7 @@ CMD ["node", "apps/api/dist/main.js"]
 # --- Analyzer worker --------------------------------------------------------
 FROM base AS analyzer
 ENV NODE_ENV=production
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/analyzer/node_modules ./apps/analyzer/node_modules
+COPY --from=build /prune/analyzer/node_modules ./apps/analyzer/node_modules
 COPY --from=build /app/apps/analyzer/dist ./apps/analyzer/dist
 COPY --from=build /app/apps/analyzer/package.json ./apps/analyzer/package.json
 COPY --from=build /app/packages/database/drizzle ./packages/database/drizzle

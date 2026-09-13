@@ -117,13 +117,16 @@ so the free tier is a quota rather than a hard wall.
 | --- | --- | --- |
 | Cloud Run | 2M requests, 180k vCPU-seconds, 360k GiB-seconds per month | a rounding error |
 | Cloud Build | 120 build-minutes per day | ~3 minutes per API deploy |
-| Artifact Registry | 0.5 GB | ~1 GB per image — **the one real limit** |
+| Artifact Registry | 0.5 GB | ~400 MB per image; keep one version of each |
 | Neon | 0.5 GB storage | demo data is a few MB |
 | Vercel Hobby | 100 GB bandwidth | fine |
 
-The API image is about 1 GB because every stage copies the whole root `node_modules`. Artifact
-Registry's free tier is 0.5 GB, so **keeping more than one image version will cost a few cents a
-month**. Delete old tags after a deploy:
+Each service image is pruned to its own production dependencies with `pnpm deploy --prod`, which
+takes them from 1.1 GB to under 400 MB. That matters for more than storage: a scale-to-zero host
+pulls the image on every cold start, and at 1.1 GB the analyzer job took **three and a half
+minutes to start** before doing any work — enough to exhaust the free vCPU-second allowance on
+idle sweeps alone. Delete old tags after a deploy so the registry stays near its 0.5 GB free
+tier:
 
 ```bash
 gcloud artifacts docker images list us-central1-docker.pkg.dev/$PROJECT/repolens/api --include-tags
