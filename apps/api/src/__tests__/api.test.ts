@@ -69,7 +69,9 @@ describe("auth", () => {
     const res = await h.app.inject({ method: "GET", url: "/api/v1/auth/github" });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toContain("https://github.com/login/oauth/authorize");
-    expect(res.headers.location).toContain("scope=read%3Auser+repo");
+    // Public repositories only by default: `repo` would also grant read/write on every private
+    // repository the user owns, which is not something a public instance should ask for.
+    expect(res.headers.location).toContain("scope=read%3Auser+public_repo");
     expect(String(res.headers["set-cookie"])).toContain("repolens_oauth_state=");
   });
 

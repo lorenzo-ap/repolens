@@ -2,7 +2,7 @@ import { randomState, safeEqual } from "@repolens/database";
 import type { MeResponse } from "@repolens/shared";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { OAUTH_SCOPES, OAUTH_STATE_COOKIE } from "../config";
+import { OAUTH_STATE_COOKIE } from "../config";
 import { AppError } from "../lib/errors";
 import { parse } from "../lib/validate";
 import { serializeUser } from "../serializers";
@@ -35,7 +35,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const url = new URL("https://github.com/login/oauth/authorize");
     url.searchParams.set("client_id", ctx.config.github.clientId);
     url.searchParams.set("redirect_uri", redirectUri);
-    url.searchParams.set("scope", OAUTH_SCOPES.join(" "));
+    url.searchParams.set("scope", ctx.config.githubScopes.join(" "));
     url.searchParams.set("state", state);
     return reply.redirect(url.toString(), 302);
   });

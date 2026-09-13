@@ -24,3 +24,16 @@ describe("error reporting", () => {
     expect(() => loadConfig({ ...base, SENTRY_DSN: "not-a-url" })).toThrow(/SENTRY_DSN/);
   });
 });
+
+describe("github oauth scopes", () => {
+  it("asks for public repositories only by default", () => {
+    expect(loadConfig(base).githubScopes).toEqual(["read:user", "public_repo"]);
+  });
+
+  it("can be widened for a self-hosted instance that analyzes private repositories", () => {
+    expect(loadConfig({ ...base, GITHUB_OAUTH_SCOPES: "read:user, repo" }).githubScopes).toEqual([
+      "read:user",
+      "repo",
+    ]);
+  });
+});

@@ -20,6 +20,14 @@ const ConfigSchema = z.object({
   MAX_CONCURRENT_ANALYSES: z.coerce.number().int().min(1).max(100).default(2),
   /** Per-user cap on analyses started in any rolling 24 hours. */
   MAX_ANALYSES_PER_DAY: z.coerce.number().int().min(1).max(10_000).default(25),
+  /**
+   * OAuth scopes requested from GitHub, comma or space separated.
+   *
+   * The default covers public repositories only. `repo` is what private-repository analysis
+   * needs, but it also grants read/write on every private repository the user owns — worth
+   * asking for on a self-hosted instance you control, not from strangers on a public one.
+   */
+  GITHUB_OAUTH_SCOPES: z.string().default("read:user,public_repo"),
 });
 
 export type ApiConfig = ReturnType<typeof loadConfig>;
@@ -47,6 +55,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     nodeEnv: c.NODE_ENV,
     trustProxy: c.TRUST_PROXY === "true",
     sentryDsn: c.SENTRY_DSN ?? null,
+    githubScopes: c.GITHUB_OAUTH_SCOPES.split(/[,\s]+/).filter(Boolean),
     quotas: {
       concurrentAnalyses: c.MAX_CONCURRENT_ANALYSES,
       analysesPerDay: c.MAX_ANALYSES_PER_DAY,
@@ -57,4 +66,3 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const OAUTH_STATE_COOKIE = "repolens_oauth_state";
-export const OAUTH_SCOPES = ["read:user", "repo"] as const;

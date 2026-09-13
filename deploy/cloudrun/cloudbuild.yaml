@@ -21,8 +21,24 @@ steps:
       - -t
       - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:latest
       - .
+  # The analyzer worker runs from the same build. It is a separate image rather than a shared
+  # one because only the API is deployed to Cloud Run; the worker needs a host that stays up.
+  - name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - build
+      - --target
+      - analyzer
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/analyzer:$SHORT_SHA
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/analyzer:latest
+      - .
 images:
   - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:$SHORT_SHA
   - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/api:latest
+  - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/analyzer:$SHORT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/repolens/analyzer:latest
 options:
   logging: CLOUD_LOGGING_ONLY
