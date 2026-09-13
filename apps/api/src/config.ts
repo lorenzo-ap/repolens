@@ -28,6 +28,12 @@ const ConfigSchema = z.object({
    * asking for on a self-hosted instance you control, not from strangers on a public one.
    */
   GITHUB_OAUTH_SCOPES: z.string().default("read:user,public_repo"),
+  /**
+   * Cloud Run Job to start when an analysis is queued, as
+   * `projects/{p}/locations/{l}/jobs/{j}`. Leave unset wherever the worker is a long-running
+   * process that polls the queue itself.
+   */
+  ANALYZER_JOB: z.string().optional(),
 });
 
 export type ApiConfig = ReturnType<typeof loadConfig>;
@@ -56,6 +62,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     trustProxy: c.TRUST_PROXY === "true",
     sentryDsn: c.SENTRY_DSN ?? null,
     githubScopes: c.GITHUB_OAUTH_SCOPES.split(/[,\s]+/).filter(Boolean),
+    analyzerJob: c.ANALYZER_JOB ?? null,
     quotas: {
       concurrentAnalyses: c.MAX_CONCURRENT_ANALYSES,
       analysesPerDay: c.MAX_ANALYSES_PER_DAY,

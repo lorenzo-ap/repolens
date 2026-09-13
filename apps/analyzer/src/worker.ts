@@ -1,0 +1,92 @@
+import { createDatabase, TokenCipher } from "@repolens/database";
+import { ANALYSIS_QUEUE, type AnalysisJobPayload, LIMITS } from "@repolens/shared";
+import { PgBoss } from "pg-boss";
+import type { Logger } from "pino";
+import type { AnalyzerConfig } from "./config";
+import { runAnalysis } from "./run-analysis";
+
+/**
+ * Queue consumption, shared by the two ways the worker runs:
+ *
+ * - `main.ts` keeps the process alive and polls forever. This is what `docker compose` and any
+ *   self-hosted deployment run.
+ * - `drain.ts` processes whatever is queued and exits, for hosts that only offer run-to-
+ *   completion jobs rather than an always-on process.
+ *
+ * Both go through the same handler, so a repository analyzed by one is analyzed identically by
+ * the other.
+ */
+
+export interface Worker {
+  /** Resolves once the worker is consuming the queue. */
+  started: Promise<void>;
+  /** Jobs currently being processed. */
+  inFlight(): number;
+  /** Epoch ms of the last time a job started or finished; seeded at construction. */
+  lastActivityAt(): number;
+  /** Total jobs processed, successfully or not. */
+  processed(): number;
+  stop(): Promise<void>;
+}
+
+export function startWorker(config: AnalyzerConfig, logger: Logger): Worker {
+  const database = createDatabase(config.databaseUrl, { max: 4 });
+  const cipher = config.tokenEncryptionKey ? new TokenCipher(config.tokenEncryptionKey) : null;
+  if (!cipher) logger.warn("TOKEN_ENCRYPTION_KEY not set: private repositories cannot be cloned");
+
+  const boss = new PgBoss({ connectionString: config.databaseUrl, schema: "pgboss", max: 2 });
+  boss.on("error", (err) => logger.error({ err }, "pg-boss error"));
+
+  let inFlight = 0;
+  let processed = 0;
+  let lastActivityAt = Date.now();
+
+  const started = (async () => {
+    await boss.start();
+    await boss.createQueue(ANALYSIS_QUEUE, {
+      retryLimit: 1,
+      retryDelay: 30,
+      expireInSeconds: Math.ceil((LIMITS.analysisTimeoutMs + 120_000) / 1000),
+      retentionSeconds: 60 * 60 * 24 * 7,
+    });
+    await boss.work<AnalysisJobPayload>(
+      ANALYSIS_QUEUE,
+      { batchSize: 1, pollingIntervalSeconds: 2 },
+      async (jobs) => {
+        inFlight += jobs.length;
+        lastActivityAt = Date.now();
+        try {
+          for (const job of jobs) {
+            const child = logger.child({ analysisId: job.data.analysisId, jobId: job.id });
+            child.info("job received");
+            await runAnalysis(
+              {
+                db: database.db,
+                cipher,
+                workdir: config.workdir,
+                logger: child,
+                network: config.network,
+              },
+              job.data.analysisId,
+            );
+            processed += 1;
+          }
+        } finally {
+          inFlight -= jobs.length;
+          lastActivityAt = Date.now();
+        }
+      },
+    );
+  })();
+
+  return {
+    started,
+    inFlight: () => inFlight,
+    lastActivityAt: () => lastActivityAt,
+    processed: () => processed,
+    async stop() {
+      await boss.stop({ graceful: true, timeout: 30_000 });
+      await database.close();
+    },
+  };
+}

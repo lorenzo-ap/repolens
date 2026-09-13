@@ -5,6 +5,7 @@ import pino from "pino";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import type { AppContext, Queue } from "./context";
+import { triggerAnalyzerJob } from "./lib/analyzer-job";
 import { createGitHubClient } from "./lib/github";
 import { closeErrorReporting, initErrorReporting } from "./lib/sentry";
 import { purgeExpiredSessions } from "./services/auth";
@@ -37,6 +38,8 @@ const queue: Queue = {
   async enqueue(payload) {
     const id = await boss.send(ANALYSIS_QUEUE, payload, { singletonKey: payload.analysisId });
     if (!id) throw new Error("queue rejected the job");
+    // Best effort, and deliberately not awaited: the job is durable in PostgreSQL either way.
+    void triggerAnalyzerJob(config.analyzerJob, logger);
   },
   async ping() {
     try {
