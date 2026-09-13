@@ -29,6 +29,34 @@ export interface Worker {
   stop(): Promise<void>;
 }
 
+export interface IdleOptions {
+  /**
+   * How long the queue must stay quiet before the worker is considered done. Exiting the moment
+   * it looks empty would miss a job enqueued a moment after start-up, so this is short but not
+   * zero.
+   */
+  idleMs: number;
+  /** Ceiling on one drain, so a pathological queue cannot run without end. */
+  maxMs: number;
+}
+
+/** Resolves once the queue has been quiet for `idleMs`, or `maxMs` has elapsed. */
+export async function waitUntilIdle(
+  worker: Worker,
+  { idleMs, maxMs }: IdleOptions,
+): Promise<{ reason: "idle" | "max runtime reached"; elapsedMs: number }> {
+  const startedAt = Date.now();
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    if (worker.inFlight() === 0 && Date.now() - worker.lastActivityAt() >= idleMs) {
+      return { reason: "idle", elapsedMs: Date.now() - startedAt };
+    }
+    if (Date.now() - startedAt >= maxMs) {
+      return { reason: "max runtime reached", elapsedMs: Date.now() - startedAt };
+    }
+  }
+}
+
 export function startWorker(config: AnalyzerConfig, logger: Logger): Worker {
   const database = createDatabase(config.databaseUrl, { max: 4 });
   const cipher = config.tokenEncryptionKey ? new TokenCipher(config.tokenEncryptionKey) : null;
