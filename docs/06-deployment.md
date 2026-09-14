@@ -39,21 +39,28 @@ Consequences worth keeping in mind:
 
 `apps/web/e2e/api-proxy.spec.ts` asserts all four of these against a running stack.
 
-## What is deliberately not deployed
+## How the worker runs without an always-on host
 
-**The analyzer worker.** It is a long-running pg-boss consumer, and no free tier will run an
-always-on background process. Without it:
+The analyzer is a pg-boss consumer that normally polls forever, which needs a host that stays up.
+On GCP that means a VM, and a VM needs an external IPv4 to reach GitHub and Neon — roughly
+$3.65/month, with no free-tier exemption.
 
-- Every public page works. The demo's analyses are real output from the real pipeline, seeded
-  once into production (below).
-- **Sign-in is switched off** by leaving `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` unset. This
-  is a supported mode — the API logs `sign-in is disabled, demo mode only`. That is deliberate:
-  with no worker, a signed-in user could queue an analysis that would never run, which is worse
-  than not offering it at all.
+Instead it runs as a **scale-to-zero Cloud Run service**. `apps/analyzer/src/serve.ts` exposes
+`POST /drain`, which consumes the queue and only answers once it has been quiet; the API nudges
+it when an analysis is queued. Measured end to end in production: **queued to completed in 8
+seconds**, with the analyzer waking in about 3.
 
-To enable the full product, run the worker anywhere that allows a persistent process (a Cloud Run
-service with `--min-instances 1`, a small VM, a container host) against the same `DATABASE_URL`
-and `TOKEN_ENCRYPTION_KEY`, then set the two GitHub variables on the API.
+Cloud Run Jobs were tried first and rejected: their scheduling latency measured 3m26s, 4m02s and
+2m11s before a container even started, against an analysis that takes about twenty seconds.
+Shrinking the image did not move it.
+
+Two consequences worth knowing:
+
+- `POST /drain` holds the connection open for the whole drain on purpose. Cloud Run only
+  allocates CPU while a request is in flight, so answering early and draining in the background
+  would be throttled mid-analysis.
+- The API's nudge is best-effort and never awaited. The job is already durable in PostgreSQL, so
+  a failed nudge delays an analysis until the hourly sweep rather than losing it.
 
 ## Why the image is built by Cloud Build
 
@@ -95,7 +102,9 @@ from `apps/web/vercel.json` and both `cd ../..` so the workspace builds from the
 | `TOKEN_ENCRYPTION_KEY` ⚠ | 64 hex chars, `openssl rand -hex 32` |
 | `MAX_CONCURRENT_ANALYSES` | `2` |
 | `MAX_ANALYSES_PER_DAY` | `25` |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` ⚠ | **unset** — see "not deployed" above |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` ⚠ | OAuth app; sign-in is disabled while unset |
+| `GITHUB_OAUTH_SCOPES` | unset, so `read:user,public_repo` — see below |
+| `ANALYZER_URL` | the analyzer service URL, nudged when an analysis is queued |
 
 Service settings: `--memory 512Mi --cpu 1 --min-instances 0 --max-instances 3 --timeout 60`.
 `min-instances 0` is what keeps it inside the always-free tier; the cost is a cold start of
@@ -107,6 +116,39 @@ Use the **direct** (non-pooled) host, not the `-pooler` one: pg-boss holds long-
 connections and expects a real session, which a transaction pooler does not provide.
 
 ---
+
+## GitHub OAuth app
+
+Created at **Settings → Developer settings → OAuth Apps**.
+
+| Field | Value |
+| --- | --- |
+| Homepage URL | `<WEB_ORIGIN>` |
+| Authorization callback URL | `<WEB_ORIGIN>/api/v1/auth/github/callback` |
+| Allow wildcard matching | **off** |
+| Enable Device Flow | **off** — unused |
+| Expire user access tokens | **off** — see below |
+
+Both URLs are on the **web** domain; the callback is proxied to the API. Registering the API host
+here is the likeliest way to break sign-in, and it fails with a GitHub `redirect_uri_mismatch`
+rather than anything from RepoLens.
+
+> **Leave "Expire user access tokens" unchecked.** It expires access tokens after eight hours and
+> returns a `refresh_token` to renew them, and nothing here reads a refresh token — `exchangeCode`
+> takes `access_token` and `scope` and discards the rest. Sessions last 30 days, so a user would
+> stay apparently signed in while every GitHub call began failing with a 401 the next day. No test
+> would catch it.
+
+### Scopes
+
+`GITHUB_OAUTH_SCOPES` defaults to `read:user,public_repo`, which covers listing repositories,
+analysis, and opening issues from findings. `repo` — what analyzing **private** repositories needs
+— also grants read and write on every private repository the user owns. Reasonable for an instance
+you host and sign into yourself; not something a public deployment should ask strangers for, since
+it makes whoever runs it the custodian of other people's private source with the encryption key
+sitting next to the database URL.
+
+Set `GITHUB_OAUTH_SCOPES=read:user,repo` on a self-hosted instance that needs private repositories.
 
 ## Cost
 
