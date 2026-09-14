@@ -150,7 +150,15 @@ export async function cloneRepository(options: CloneOptions): Promise<CloneResul
   }
 
   const max = options.maxWorkingTreeBytes ?? LIMITS.maxWorkingTreeBytes;
-  const bytes = await workingTreeBytes(dir, max);
+  // Anything thrown from here on must still take the clone with it, or a failed analysis leaves
+  // a checked-out repository behind on an instance that may serve many more.
+  let bytes: number;
+  try {
+    bytes = await workingTreeBytes(dir, max);
+  } catch (err) {
+    await cleanup();
+    throw new CloneError(`Could not measure the working tree: ${scrub(String(err))}`, "unknown");
+  }
   if (bytes > max) {
     await cleanup();
     throw new CloneError(
