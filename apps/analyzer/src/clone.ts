@@ -1,12 +1,8 @@
-import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import { GitError, type Logger, runGit, scrub } from "@repolens/analysis";
 import { LIMITS } from "@repolens/shared";
-
-const execFileAsync = promisify(execFile);
 
 export interface CloneOptions {
   /** HTTPS clone URL without credentials. */
@@ -56,10 +52,38 @@ function assertHttpsGitHubUrl(url: string): void {
     throw new CloneError("Clone URL path is not owner/name", "unknown");
 }
 
-async function workingTreeBytes(dir: string): Promise<number> {
-  const { stdout } = await execFileAsync("du", ["-sk", "--exclude=.git", dir], { timeout: 30_000 });
-  const kb = Number.parseInt(stdout.split("\t")[0] ?? "0", 10);
-  return Number.isFinite(kb) ? kb * 1024 : 0;
+/**
+ * Total size of the working tree, ignoring `.git`.
+ *
+ * Walks the tree instead of shelling out to `du -sk --exclude=.git`: `--exclude` is a GNU
+ * extension that BSD `du` rejects outright, so that version failed on macOS and took the
+ * documented local setup down with it.
+ *
+ * Walking also lets the count stop as soon as `limit` is passed, which is the only thing the
+ * caller asks of it — `du` has to finish the whole tree before it can say anything.
+ *
+ * Symbolic links are skipped rather than followed: a link can point outside the tree, and its own
+ * size is not what the limit is guarding against.
+ */
+export async function workingTreeBytes(dir: string, limit: number): Promise<number> {
+  let total = 0;
+  const pending: string[] = [dir];
+  while (pending.length > 0) {
+    const current = pending.pop() as string;
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== ".git") pending.push(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      total += (await stat(full)).size;
+      if (total > limit) return total;
+    }
+  }
+  return total;
 }
 
 /**
@@ -125,8 +149,8 @@ export async function cloneRepository(options: CloneOptions): Promise<CloneResul
     throw err;
   }
 
-  const bytes = await workingTreeBytes(dir);
   const max = options.maxWorkingTreeBytes ?? LIMITS.maxWorkingTreeBytes;
+  const bytes = await workingTreeBytes(dir, max);
   if (bytes > max) {
     await cleanup();
     throw new CloneError(

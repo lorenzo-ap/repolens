@@ -106,9 +106,6 @@ pnpm dev                        # web :3000 · api :4000 · analyzer worker
 Open <http://localhost:3000> and click **Explore the demo**. Sign-in needs a GitHub OAuth app
 (callback `<WEB_ORIGIN>/api/v1/auth/github/callback`); without one the app runs in demo-only mode.
 
-> **On macOS**, run the seed through Docker instead — it shells out to GNU `du`, which BSD `du`
-> rejects: `docker compose run --rm seed`
-
 Everything at once, including the database:
 
 ```bash
