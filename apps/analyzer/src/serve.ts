@@ -10,11 +10,14 @@ import { startWorker, waitUntilIdle } from "./worker";
  * scheduling latency was measured at two to four minutes before a container started — far longer
  * than an analysis itself takes. A service cold-starts in seconds.
  *
- * The catch is that Cloud Run only allocates CPU while a request is in flight, so draining in the
- * background after answering would be throttled mid-analysis. `POST /drain` therefore holds the
- * connection open until the queue is quiet and only then responds. Callers are not expected to
- * wait for it: the API fires the request and forgets it, and Cloud Scheduler sweeps on a timer as
- * a safety net.
+ * `POST /drain` holds the connection open until the queue is quiet and only then responds.
+ * Callers are not expected to wait for it: the API fires the request and forgets it, and Cloud
+ * Scheduler sweeps on a timer as a safety net.
+ *
+ * The service must run with CPU always allocated (`--no-cpu-throttling`). Cloud Run otherwise
+ * throttles CPU to near zero whenever no request is in flight, and an analysis picked up as a
+ * drain returns — or one still running when a caller disconnects — would crawl instead of
+ * failing, which is far harder to diagnose.
  */
 
 const config = loadConfig();

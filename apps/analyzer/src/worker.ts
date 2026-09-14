@@ -48,11 +48,18 @@ export async function waitUntilIdle(
   const startedAt = Date.now();
   for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
-    if (worker.inFlight() === 0 && Date.now() - worker.lastActivityAt() >= idleMs) {
-      return { reason: "idle", elapsedMs: Date.now() - startedAt };
+    const now = Date.now();
+    // Measured from the later of this drain's start and the last job, never from the last job
+    // alone. On an instance that is already warm, lastActivityAt is minutes old, so the original
+    // check was satisfied on the first tick and the drain returned before pg-boss had polled for
+    // the job that triggered it — ending the request, and with it the CPU allocation, while the
+    // analysis was only just beginning.
+    const quietSince = Math.max(worker.lastActivityAt(), startedAt);
+    if (worker.inFlight() === 0 && now - quietSince >= idleMs) {
+      return { reason: "idle", elapsedMs: now - startedAt };
     }
-    if (Date.now() - startedAt >= maxMs) {
-      return { reason: "max runtime reached", elapsedMs: Date.now() - startedAt };
+    if (now - startedAt >= maxMs) {
+      return { reason: "max runtime reached", elapsedMs: now - startedAt };
     }
   }
 }
