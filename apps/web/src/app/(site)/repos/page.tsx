@@ -156,7 +156,10 @@ export default function ReposPage() {
           <Table>
             <THead>
               <tr>
-                <Th>Repository</Th>
+                {/* The only elastic column: it absorbs the leftover width so the fixed ones
+                    never get squeezed, and pairs with max-w-0 on the cell so a long repository
+                    description truncates instead of widening the table. */}
+                <Th className="w-full">Repository</Th>
                 <Th className="hidden md:table-cell">Language</Th>
                 <Th className="hidden lg:table-cell">Size</Th>
                 <Th className="hidden sm:table-cell">Pushed</Th>
@@ -172,7 +175,7 @@ export default function ReposPage() {
                 const limited = !r.primaryLanguage || !AST_LANGUAGES.has(r.primaryLanguage);
                 return (
                   <Tr key={r.githubId}>
-                    <Td>
+                    <Td className="max-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         {r.isPrivate ? (
                           <Lock className="size-3 shrink-0 text-fg-tertiary" aria-label="Private" />
@@ -207,19 +210,19 @@ export default function ReposPage() {
                         </div>
                       </div>
                     </Td>
-                    <Td className="hidden md:table-cell">
+                    <Td className="hidden whitespace-nowrap md:table-cell">
                       <span className="text-fg-secondary">{r.primaryLanguage ?? "–"}</span>
                       {limited ? (
                         <span className="ml-1.5 text-2xs text-fg-tertiary">no AST</span>
                       ) : null}
                     </Td>
-                    <Td className="hidden text-fg-secondary lg:table-cell">
+                    <Td className="hidden whitespace-nowrap text-fg-secondary lg:table-cell">
                       {formatBytesKb(r.sizeKb)}
                     </Td>
-                    <Td className="hidden text-fg-secondary sm:table-cell">
+                    <Td className="hidden whitespace-nowrap text-fg-secondary sm:table-cell">
                       {relativeTime(r.pushedAt)}
                     </Td>
-                    <Td>
+                    <Td className="whitespace-nowrap">
                       {active ? (
                         <Link href={`/r/${r.owner}/${r.name}/analyses/${active.id}`}>
                           <StatusBadge status={active.status} />
@@ -235,7 +238,7 @@ export default function ReposPage() {
                     <Td numeric>
                       <ScoreText score={latest?.healthScore ?? null} />
                     </Td>
-                    <Td className="text-right">
+                    <Td className="whitespace-nowrap text-right">
                       {active ? (
                         <Button asChild size="sm" variant="ghost">
                           <Link href={`/r/${r.owner}/${r.name}/analyses/${active.id}`}>
