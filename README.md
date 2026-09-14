@@ -1,37 +1,53 @@
 # RepoLens
 
-Engineering intelligence for GitHub repositories. RepoLens clones a repository, runs deterministic
-static analysis on the TypeScript/JavaScript AST, the module graph, the package manifests, the
-lockfile and the Git history, and turns the result into one auditable health score with findings
-you can act on. No AI API is required; the analysis never executes code from the repository.
+**Engineering intelligence for GitHub repositories.** Point it at a repository and it returns one
+auditable health score, backed by findings you can act on — with the evidence, file and line for
+every one.
 
-- **Health score** with seven category scores and a fully inspectable derivation.
-- **Findings** with severity, evidence, recommendation, file and line, searchable and filterable.
-- **Architecture** as an interactive import graph with cycle detection at directory and file level.
-- **Dependencies, Testing, Complexity and Git history** pages, each a focused view over the same
-  metrics document: tables, distributions and hotspots with links into the findings list.
-- **Analyses** with a score trend and a comparison of two analyses: improved, regressed and
-  unchanged categories, new and resolved findings, metric deltas.
-- **Live progress** for each analysis step, with timings.
-- **GitHub integration**: OAuth sign-in, private repositories, issue creation from a finding.
-- **Public demo** produced by the same pipeline, analyzing a real open-source repository at
-  several historical commits.
+### [→ Try the live demo](https://repolens-sepia.vercel.app) · no sign-in required
 
-## Architecture
+[![CI](https://github.com/lorenzo-ap/repolens/actions/workflows/ci.yml/badge.svg)](https://github.com/lorenzo-ap/repolens/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+RepoLens clones a repository and runs deterministic static analysis over the TypeScript/JavaScript
+AST, the module graph, the package manifests, the lockfile and the Git history. **No LLM is
+involved and repository code is never executed** — the same commit always produces the same score,
+and you can trace every point of it back to a specific finding.
+
+Sign in with GitHub to analyze your own repositories, or explore the demo, which is real output
+from the same pipeline. RepoLens also [analyzes itself](https://repolens-sepia.vercel.app).
+
+---
+
+## What it does
+
+| | |
+| --- | --- |
+| **Health score** | Seven weighted categories, with the full derivation shown in the UI — no black box |
+| **Findings** | Severity, evidence, recommendation, file and line. Searchable, filterable, sortable |
+| **Architecture** | Interactive import graph with cycle detection (Tarjan) at file and directory level |
+| **Complexity** | Cyclomatic and cognitive complexity per function, with distributions and worst offenders |
+| **Dependencies** | Lockfile hygiene, unbounded ranges, deprecated packages, registry advisories |
+| **Testing** | Frameworks, test-to-source ratio, untested areas, focused and skipped tests |
+| **Git history** | Bus factor, activity, churn × complexity hotspots |
+| **Comparisons** | Diff two analyses: improved and regressed categories, new and resolved findings |
+
+Analyses stream live progress per step, and findings can be turned into a GitHub issue in one click.
+
+## How it works
 
 ```
-apps/web        Next.js 16 app (App Router, Tailwind 4, TanStack Query, Recharts, React Flow)
-apps/api        Fastify 5 API (Zod contracts, Drizzle + PostgreSQL, pg-boss queue producer)
-apps/analyzer   Worker: hardened git fetch, analysis pipeline, result persistence, demo seed
-packages/shared    Zod schemas that double as API contracts and domain types
-packages/database  Drizzle schema, migrations, client, token encryption
-packages/analysis  Deterministic analyzers, scoring model, pipeline runner (fixture-tested)
-packages/config    Shared TypeScript configuration
-docs/              Product, UX, design-system, architecture (ADRs), analysis-engine and deployment
+apps/web        Next.js 16 · App Router, Tailwind 4, TanStack Query, Recharts, React Flow
+apps/api        Fastify 5 · Zod contracts, Drizzle + PostgreSQL, pg-boss queue producer
+apps/analyzer   Worker · hardened git fetch, analysis pipeline, result persistence
+packages/analysis   Deterministic analyzers, scoring model, pipeline runner (fixture-tested)
+packages/shared     Zod schemas that double as API contracts and domain types
+packages/database   Drizzle schema, migrations, client, token encryption
 ```
 
-Three processes (web, api, analyzer) and one PostgreSQL database. The job queue runs in PostgreSQL
-through pg-boss, so there is no Redis to operate. See `docs/04-architecture.md` for the ADRs.
+Three processes and one PostgreSQL database. The job queue lives in Postgres via pg-boss, so
+there's no Redis to operate. The browser only ever talks to the web origin — Next.js rewrites
+`/api/v1/*` to the API — which keeps session cookies first-party and CORS out of the request path.
 
 ### What the analyzers measure
 
@@ -39,15 +55,39 @@ through pg-boss, so there is no Redis to operate. See `docs/04-architecture.md` 
 | --- | --- | --- |
 | Structure | file tree | languages, README/LICENSE/CI presence, lockfiles, oversized files |
 | TypeScript | tsconfig + AST | strict mode, explicit `any`, `@ts-ignore`, non-null assertions, unused exports |
-| Quality | AST + text | long functions, deep nesting, empty catch blocks, duplicated blocks, linter setup |
-| Complexity | AST | cyclomatic and cognitive complexity per function, distribution, top functions |
-| Dependencies | manifests + lockfile | unbounded ranges, git/URL deps, deprecated packages, registry advisories |
-| Architecture | import graph | cycles (Tarjan), fan-in/fan-out, hub modules, god files, orphans |
-| Testing | manifests + AST | frameworks, test cases, test-to-source ratio, untested areas, `.only` |
+| Quality | AST + text | long functions, deep nesting, empty catch blocks, duplicated blocks |
+| Complexity | AST | cyclomatic and cognitive complexity per function |
+| Dependencies | manifests + lockfile | unbounded ranges, git/URL deps, deprecated packages, advisories |
+| Architecture | import graph | cycles, fan-in/fan-out, hub modules, god files, orphans |
+| Testing | manifests + AST | frameworks, test cases, test-to-source ratio, `.only` |
 | Git history | `git log` | bus factor, activity, large commits, churn × complexity hotspots |
 
-Every metric is documented in `docs/05-analysis-engine.md`. The scoring inputs and weights are shown
-in the UI next to the score ("How is this computed?").
+Every metric is documented in [`docs/05-analysis-engine.md`](docs/05-analysis-engine.md).
+
+## Engineering notes
+
+The parts that were interesting to build:
+
+**Analyzing untrusted code safely.** Repository code is never executed — no `npm install`, no lint
+plugins, no scripts. Files are read as data, and `git` runs with hooks, prompts, credential helpers
+and non-HTTPS protocols disabled. Hard limits cap repository size, working-tree size, file count,
+AST file size and total runtime via `AbortSignal`; fetches are shallow, into a random temp
+directory that is always removed.
+
+**Determinism as a feature.** `packages/analysis` runs the full pipeline against a fixture
+repository with deliberately planted issues and asserts *exact* findings — so a scoring change is
+never accidental.
+
+**Credential handling.** GitHub tokens are encrypted at rest (AES-256-GCM) and decrypted only to
+call GitHub. The server stores a SHA-256 hash of the session token, never the token. Private
+repositories 404 for strangers rather than 403, so names are never confirmed. The public deployment
+requests `public_repo` only — analyzing private repositories is a self-hosting capability, because
+asking strangers for `repo` scope means becoming custodian of their private source.
+
+**Running it for free.** Production is Vercel + Cloud Run + Neon on permanently-free tiers. Both
+services scale to zero; the API nudges the analyzer with an OIDC token when work is queued, so an
+analysis starts in seconds rather than waiting on a polling worker. Trade-offs and the full runbook
+are in [`docs/06-deployment.md`](docs/06-deployment.md).
 
 ## Running locally
 
@@ -55,67 +95,50 @@ Requirements: Node 22+, pnpm 10, PostgreSQL 16, git.
 
 ```bash
 pnpm install
-cp .env.example .env            # fill in TOKEN_ENCRYPTION_KEY (openssl rand -hex 32)
-createdb repolens               # or use docker compose up db
-pnpm db:migrate                 # applies packages/database/drizzle/*.sql
+cp .env.example .env            # set TOKEN_ENCRYPTION_KEY (openssl rand -hex 32)
+createdb repolens
+pnpm db:migrate
 
-pnpm seed:demo                  # analyzes the demo repository (honojs/hono at 4 tags by default)
-pnpm dev                        # web :3000, api :4000, analyzer worker
+pnpm seed:demo                  # analyzes a real open-source repo at several tags
+pnpm dev                        # web :3000 · api :4000 · analyzer worker
 ```
 
-Open http://localhost:3000 and click **Explore the demo**. Sign-in requires a GitHub OAuth app
-(callback URL `<WEB_ORIGIN>/api/v1/auth/github/callback` — the browser stays on the web origin and
-the request is proxied to the API) configured through `GITHUB_CLIENT_ID` and
-`GITHUB_CLIENT_SECRET`; without it the app runs in demo-only mode.
+Open <http://localhost:3000> and click **Explore the demo**. Sign-in needs a GitHub OAuth app
+(callback `<WEB_ORIGIN>/api/v1/auth/github/callback`); without one the app runs in demo-only mode.
 
-### Docker
+> **On macOS**, run the seed through Docker instead — it shells out to GNU `du`, which BSD `du`
+> rejects: `docker compose run --rm seed`
+
+Everything at once, including the database:
 
 ```bash
-docker compose up --build       # db, migrations, api, analyzer, web, demo seed
+docker compose up --build
 ```
 
 ## Quality gates
 
 ```bash
-pnpm typecheck                  # strict TypeScript across all packages
-pnpm lint                       # Biome (lint + format)
-pnpm test                       # unit + integration tests (needs a PostgreSQL test database)
-pnpm test:e2e                   # Playwright against a running, seeded stack
+pnpm lint        # Biome
+pnpm typecheck   # strict TypeScript across all packages
+pnpm test        # unit + integration (needs a PostgreSQL test database)
+pnpm test:e2e    # Playwright, desktop and mobile viewports
 pnpm build
 ```
 
-Tests: `packages/analysis` runs the full pipeline against a fixture repository with deliberately
-planted issues and asserts exact findings and determinism; `apps/api` runs route tests against a
-real PostgreSQL database (auth, CSRF, authorization, pagination, comparison, issue creation);
-`apps/analyzer` covers persistence and failure handling; `apps/web/e2e` drives the demo in a
-browser on desktop and mobile viewports.
+API routes are tested against a real PostgreSQL database — auth, CSRF, authorization, pagination,
+quotas and comparison — and the end-to-end suite additionally asserts that the API proxy is
+transparent enough for sessions to stay first-party.
 
-## Security model
+## Documentation
 
-- Repository code is never executed: no `npm install`, no lint plugins, no scripts. Files are read
-  as data; `git` runs with hooks, prompts, credential helpers and non-HTTPS protocols disabled.
-- Hard limits: repository size (GitHub `size`), working tree size after fetch, file count, single
-  file size for AST parsing, fetch timeout and an overall analysis timeout enforced via
-  `AbortSignal`. Fetches are shallow (400 commits, no tags) into a random temp directory that is
-  always removed.
-- GitHub tokens are encrypted at rest (AES-256-GCM) and only decrypted to talk to GitHub. Session
-  cookies are `HttpOnly; SameSite=Lax`, the server stores only a SHA-256 hash of the token, and
-  state-changing requests must carry a trusted `Origin`.
-- Private repositories are only readable by the account that added them; lookups by strangers
-  return 404 so names are never confirmed. The demo repository is read-only for everyone.
-- All input is validated with Zod; rate limiting is enabled on the API; security headers are set by
-  helmet (API) and Next.js headers (web).
-
-## Configuration
-
-See `.env.example`. Notable variables: `LIMITS` live in `packages/shared/src/limits.ts`;
-`ANALYZER_NETWORK=false` disables the npm advisory lookup for offline environments;
-`DEMO_REPO_OWNER`/`DEMO_REPO_NAME`/`DEMO_COMMITS` choose what the seed analyzes.
-
-## Deployment
-
-`docs/06-deployment.md` is the runbook: the Vercel + Cloud Run + Neon split, every environment
-variable per service, cost limits, and the one-time setup.
+| | |
+| --- | --- |
+| [`docs/01-product.md`](docs/01-product.md) | Product definition and scope |
+| [`docs/02-ux.md`](docs/02-ux.md) | Flows and interaction design |
+| [`docs/03-design-system.md`](docs/03-design-system.md) | Visual language and components |
+| [`docs/04-architecture.md`](docs/04-architecture.md) | Architecture decision records |
+| [`docs/05-analysis-engine.md`](docs/05-analysis-engine.md) | Every metric and how it is scored |
+| [`docs/06-deployment.md`](docs/06-deployment.md) | Production runbook |
 
 ## License
 
