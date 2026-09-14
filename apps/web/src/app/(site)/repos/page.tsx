@@ -185,12 +185,16 @@ export default function ReposPage() {
                             {r.local ? (
                               <Link
                                 href={`/r/${r.owner}/${r.name}`}
+                                title={r.description ?? undefined}
                                 className="truncate font-mono text-xs text-fg hover:underline"
                               >
                                 {r.fullName}
                               </Link>
                             ) : (
-                              <span className="truncate font-mono text-xs text-fg">
+                              <span
+                                title={r.description ?? undefined}
+                                className="truncate font-mono text-xs text-fg"
+                              >
                                 {r.fullName}
                               </span>
                             )}
@@ -204,9 +208,6 @@ export default function ReposPage() {
                               <ExternalLink className="size-3" />
                             </a>
                           </div>
-                          {r.description ? (
-                            <p className="truncate text-xs text-fg-tertiary">{r.description}</p>
-                          ) : null}
                         </div>
                       </div>
                     </Td>
