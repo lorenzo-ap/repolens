@@ -52,7 +52,7 @@ export function ScoreBar({
     >
       <span
         className={cn("block h-full rounded-full transition-[width] duration-300", BAND_BAR[band])}
-        style={{ width: `${score ?? 0}%` }}
+        style={{ width: `${Math.round(score ?? 0)}%` }}
       />
     </span>
   );
